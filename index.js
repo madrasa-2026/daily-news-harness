@@ -100,9 +100,9 @@ async function fetchRssArticles() {
 }
 
 function buildPrompt(article) {
-  return `You are an expert news editor and Facebook social media manager.
+  return `You are a viral social media strategist and senior editor for 'NAGORIK DESK' (নাগরিক ডেস্ক).
 
-TASK: Evaluate the news article below on 3 criteria, then decide PASS or REJECT, and if PASS, rewrite it.
+TASK: Evaluate the news article below on 3 criteria, then decide PASS or REJECT. If PASS, craft a highly viral, engaging Facebook post.
 
 ARTICLE:
 Title: ${article.title}
@@ -112,28 +112,28 @@ Snippet: ${article.content || article.title}
 Date: ${article.pubDate}
 
 EVALUATION CRITERIA (score 1-10 each):
-1. Newsworthiness - Is it timely, impactful, interesting to general audience?
-2. Factual Clarity - Is it clear, specific, not vague/rumor/clickbait?
-3. Relevance - Is it relevant globally or to broad audience (not hyper-local trivia)?
+1. Newsworthiness - Is it timely, impactful, high-interest to general audience?
+2. Factual Clarity - Is it clear, specific, reliable?
+3. Viral Potential - Will people comment, share, or react?
 
 DECISION RULE: PASS only if all 3 scores >= 6 AND average >= 7. Otherwise REJECT.
 
-IF PASS, rewrite into a highly engaging professional Facebook post with:
-- Eye-catching HOOK line (1 sentence, with 1-2 emojis)
-- Summarized BODY (2-4 short paragraphs, easy to read, line breaks)
-- Key facts preserved, no hallucinations
-- 1-2 relevant emojis naturally placed
-- 3-5 relevant hashtags at end
-- End with "🔗 Source: ${article.link}" on new line
-- Total 900-1200 characters max
-- Professional, trustworthy, not sensationalized
+VIRAL WRITING FORMAT (IF PASS):
+- Write in clear, punchy, highly engaging language (prioritize Bengali for local/regional news, English for global tech/world news).
+- HOOK: 1 viral opening line with emojis (e.g. 🚨 ব্রেকিং নিউজ | 🔥 বড় তথ্য | ⚠️ আলোচিত খবর).
+- BODY: 2-3 short, scannable paragraphs highlighting key facts and real-world impact.
+- ENGAGEMENT QUESTION (Call to Action): 1 sentence asking readers for their opinion (e.g. "আপনার মতামত কী? কমেন্টে জানান! 👇").
+- HASHTAGS: 4-5 high-volume trending hashtags at end (e.g. #NagorikDesk #BreakingNews #Trending #NewsUpdate).
+- IMPORTANT: DO NOT put any http/https link URLs inside the main post body text (to prevent Facebook algorithm reach throttling). End the post body text with: "👇 সংবাদের মূল লিংক প্রথম কমেন্টে দেখুন।"
+- COMMENT LINK: Create a clean separate comment string: "🔗 মূল খবরের লিংক: ${article.link}"
 
 OUTPUT STRICT JSON ONLY (no markdown, no extra text):
 {
   "decision": "PASS" or "REJECT",
-  "scores": { "newsworthiness": 0, "factualClarity": 0, "relevance": 0 },
-  "reason": "1 sentence reason for decision",
-  "rewrittenPost": "full post text if PASS else empty string"
+  "scores": { "newsworthiness": 0, "factualClarity": 0, "viralPotential": 0 },
+  "reason": "1 sentence reason",
+  "rewrittenPost": "full post text without external link",
+  "commentLink": "🔗 মূল খবরের লিংক: ${article.link}"
 }`;
 }
 
@@ -173,7 +173,7 @@ async function evaluateWithGroq(article) {
     const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
       model: 'groq/compound-mini',
       messages: [
-        { role: 'system', content: 'You are a news editor. Output strict JSON only.' },
+        { role: 'system', content: 'You are a news editor for NAGORIK DESK. Output strict JSON only.' },
         { role: 'user', content: prompt }
       ],
       temperature: 0.7,
@@ -192,7 +192,10 @@ async function evaluateWithGroq(article) {
   }
 }
 
-async function sendToPabbly(article, rewrittenPost) {
+async function sendToPabbly(article, evalResult) {
+  const rewrittenPost = typeof evalResult === 'string' ? evalResult : evalResult.rewrittenPost;
+  const commentLink = (typeof evalResult === 'object' && evalResult.commentLink) ? evalResult.commentLink : `🔗 মূল খবরের লিংক: ${article.link}`;
+
   if (!PABBLY_WEBHOOK_URL) {
     console.warn('[PUBLISH] PABBLY_WEBHOOK_URL not set - skipping publish (logging only)');
     console.log(`[PUBLISH][DRY-RUN] Would send: ${rewrittenPost.slice(0, 200)}...`);
@@ -205,9 +208,11 @@ async function sendToPabbly(article, rewrittenPost) {
     published_at: article.pubDate,
     rewritten_post: rewrittenPost,
     content: rewrittenPost,
+    comment_link: commentLink,
+    first_comment: commentLink,
     generated_at: new Date().toISOString()
   };
-  console.log(`[PUBLISH] Sending to Pabbly webhook...`);
+  console.log(`[PUBLISH] Sending viral payload to Pabbly webhook...`);
   console.log(`[PUBLISH] URL: ${PABBLY_WEBHOOK_URL.slice(0, 60)}...`);
   try {
     const res = await axios.post(PABBLY_WEBHOOK_URL, payload, {
@@ -220,6 +225,8 @@ async function sendToPabbly(article, rewrittenPost) {
     console.error(`[PUBLISH] Failed: ${err.response ? `Status ${err.response.status} - ${JSON.stringify(err.response.data).slice(0, 300)}` : err.message}`);
     throw err;
   }
+  }
+}
 }
 
 let isRunning = false;
@@ -267,7 +274,7 @@ async function runNewsCycle(trigger = 'cron') {
         console.log(`[CYCLE] PASSED - rewriting ready, publishing...`);
         console.log(`[CYCLE] Rewritten preview: ${result.rewrittenPost.slice(0, 200)}...`);
 
-        await sendToPabbly(article, result.rewrittenPost);
+        await sendToPabbly(article, result);
         publishedCount++;
         summary.published++;
         console.log(`[CYCLE] Published ${publishedCount}/${MAX_POSTS_PER_CYCLE} for this cycle`);
@@ -358,12 +365,12 @@ app.listen(PORT, () => {
   if (RSS_FEED_URLS.length === 0) console.warn('[SERVER] WARNING: RSS_FEED_URLS is empty!');
 });
 
-cron.schedule('0 */4 * * *', () => {
+cron.schedule('0 0,5,10,15,20 * * *', () => {
   console.log(`[CRON] Triggered scheduled run at ${new Date().toISOString()}`);
   runNewsCycle('cron').catch(err => console.error('[CRON] Error:', err.message));
 });
 
-console.log('[CRON] Scheduled: every 4 hours at minute 0 (0 */4 * * *)');
+console.log('[CRON] Scheduled: 5 times daily at 00:00, 05:00, 10:00, 15:00, 20:00 UTC (0 0,5,10,15,20 * * *)');
 console.log('[CRON] Keep-alive: ping /health every 5 min via cron-job.org');
 
 process.on('unhandledRejection', (err) => console.error('[UNHANDLED]', err));
