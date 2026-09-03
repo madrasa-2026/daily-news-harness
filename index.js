@@ -305,14 +305,63 @@ async function runNewsCycle(trigger = 'cron') {
 
 app.get('/', (req, res) => {
   res.send(`
-    <h1>🚀 Daily News Harness is Running</h1>
-    <p>Time: ${new Date().toISOString()}</p>
-    <ul>
-      <li><a href="/health">/health</a> - Health check (use for cron-job.org)</li>
-      <li><a href="/ping">/ping</a> - Ping endpoint</li>
-      <li><a href="/trigger">/trigger</a> - Manually trigger news cycle</li>
-    </ul>
-    <p>Feeds: ${RSS_FEED_URLS.length} | LLM: ${GEMINI_API_KEY ? 'Gemini' : GROQ_API_KEY ? 'Groq' : 'NOT SET'} | Pabbly: ${PABBLY_WEBHOOK_URL ? 'SET' : 'NOT SET'}</p>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>NAGORIK DESK - Automated News Publisher</title>
+      <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .card { background: #1e293b; border-radius: 16px; padding: 2.5rem; max-width: 600px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); border: 1px solid #334155; text-align: center; }
+        h1 { color: #38bdf8; font-size: 1.8rem; margin-bottom: 0.5rem; }
+        p { color: #94a3b8; font-size: 0.95rem; }
+        .btn { display: inline-block; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; padding: 1rem 2rem; font-size: 1.1rem; font-weight: bold; border-radius: 12px; cursor: pointer; text-decoration: none; margin-top: 1.5rem; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 10px 15px -3px rgba(37,99,235,0.4); }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 15px 20px -3px rgba(37,99,235,0.6); }
+        .btn:active { transform: translateY(0); }
+        .status { margin-top: 1.5rem; font-size: 0.9rem; color: #4ade80; background: #064e3b; padding: 0.75rem; border-radius: 8px; display: none; }
+        .badge { background: #334155; color: #38bdf8; padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600; margin: 0.2rem; display: inline-block; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <h1>📰 NAGORIK DESK Publisher</h1>
+        <p>Automated Viral News Engine | 5 Posts/Day + On-Demand Exception Slot</p>
+        <div>
+          <span class="badge">Status: Live</span>
+          <span class="badge">Page: Nagorik Desk</span>
+          <span class="badge">Schedule: 5x Daily</span>
+        </div>
+        <br/>
+        <button class="btn" onclick="triggerPost()">🚀 Post Now On-Demand (Exception Slot)</button>
+        <div id="status" class="status"></div>
+        <hr style="border-color: #334155; margin-top: 2rem;"/>
+        <p style="font-size: 0.8rem; color: #64748b;">
+          Direct API Trigger: <a href="/trigger" style="color: #38bdf8;">/trigger</a> | Health: <a href="/health" style="color: #38bdf8;">/health</a>
+        </p>
+      </div>
+      <script>
+        async function triggerPost() {
+          const el = document.getElementById('status');
+          el.style.display = 'block';
+          el.style.color = '#38bdf8';
+          el.style.background = '#1e3a8a';
+          el.innerText = '⌛ Triggering viral news cycle... fetching & rewriting...';
+          try {
+            const res = await fetch('/trigger');
+            const data = await res.json();
+            el.style.color = '#4ade80';
+            el.style.background = '#064e3b';
+            el.innerText = '✅ SUCCESS: Viral news cycle triggered! Check Nagorik Desk Facebook page in 30s!';
+          } catch(e) {
+            el.style.color = '#f87171';
+            el.style.background = '#7f1d1d';
+            el.innerText = '❌ Failed to trigger: ' + e.message;
+          }
+        }
+      </script>
+    </body>
+    </html>
   `);
 });
 
