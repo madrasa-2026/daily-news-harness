@@ -10,7 +10,7 @@ const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
-const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || 'https://rss.cnn.com/rss/edition.rss,https://feeds.bbci.co.uk/news/world/rss.xml,https://feeds.reutersagency.com/feed/?best-topics=tech&post_type=best')
+const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || 'https://www.prothomalo.com/feed,https://feeds.bbci.co.uk/bengali/rss.xml,https://www.thedailystar.net/news/bangladesh/rss.xml,https://feeds.bbci.co.uk/news/world/rss.xml')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
