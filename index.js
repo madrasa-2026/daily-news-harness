@@ -416,19 +416,21 @@ app.get('/status', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`\n========================================`);
-  console.log(`[SERVER] Daily News Harness running on port ${PORT}`);
-  console.log(`[SERVER] Health: http://localhost:${PORT}/health`);
-  console.log(`[SERVER] Ping: http://localhost:${PORT}/ping`);
-  console.log(`[SERVER] Manual trigger: http://localhost:${PORT}/trigger`);
-  console.log(`[SERVER] Feeds configured: ${RSS_FEED_URLS.length}`);
-  console.log(`[SERVER] LLM: ${GEMINI_API_KEY ? 'Gemini (' + GEMINI_MODEL + ')' : GROQ_API_KEY ? 'Groq' : 'NOT SET - add GEMINI_API_KEY!'}`);
-  console.log(`[SERVER] Pabbly: ${PABBLY_WEBHOOK_URL ? 'SET' : 'NOT SET - add PABBLY_WEBHOOK_URL!'}`);
-  console.log(`========================================\n`);
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`\n========================================`);
+    console.log(`[SERVER] Daily News Harness running on port ${PORT}`);
+    console.log(`[SERVER] Health: http://localhost:${PORT}/health`);
+    console.log(`[SERVER] Ping: http://localhost:${PORT}/ping`);
+    console.log(`[SERVER] Manual trigger: http://localhost:${PORT}/trigger`);
+    console.log(`[SERVER] Feeds configured: ${RSS_FEED_URLS.length}`);
+    console.log(`[SERVER] LLM: ${GEMINI_API_KEY ? 'Gemini (' + GEMINI_MODEL + ')' : GROQ_API_KEY ? 'Groq' : 'NOT SET - add GEMINI_API_KEY!'}`);
+    console.log(`[SERVER] Pabbly: ${PABBLY_WEBHOOK_URL ? 'SET' : 'NOT SET - add PABBLY_WEBHOOK_URL!'}`);
+    console.log(`========================================\n`);
 
-  if (RSS_FEED_URLS.length === 0) console.warn('[SERVER] WARNING: RSS_FEED_URLS is empty!');
-});
+    if (RSS_FEED_URLS.length === 0) console.warn('[SERVER] WARNING: RSS_FEED_URLS is empty!');
+  });
+}
 
 cron.schedule('0 0,5,10,15,20 * * *', () => {
   console.log(`[CRON] Triggered scheduled run at ${new Date().toISOString()}`);
@@ -440,3 +442,5 @@ console.log('[CRON] Keep-alive: ping /health every 5 min via cron-job.org');
 
 process.on('unhandledRejection', (err) => console.error('[UNHANDLED]', err));
 process.on('uncaughtException', (err) => console.error('[UNCAUGHT]', err));
+
+module.exports = { runNewsCycle, fetchRssArticles, sendToPabbly, evaluateWithGroq, evaluateWithGemini };
