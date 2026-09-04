@@ -137,6 +137,13 @@ OUTPUT STRICT JSON ONLY (no markdown, no extra text):
 }`;
 }
 
+function extractJson(rawText) {
+  const cleaned = rawText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('No JSON object found in LLM response');
+  return JSON.parse(match[0]);
+}
+
 async function evaluateWithGemini(article) {
   if (!GEMINI_API_KEY) {
     console.log('[BRAIN] No GEMINI_API_KEY set, trying Groq fallback...');
@@ -152,8 +159,7 @@ async function evaluateWithGemini(article) {
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
     console.log(`[BRAIN][GEMINI] Raw response: ${text.slice(0, 300)}...`);
-    const cleaned = text.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(cleaned);
+    const parsed = extractJson(text);
     console.log(`[BRAIN][GEMINI] Decision: ${parsed.decision} | Scores: ${JSON.stringify(parsed.scores)} | Reason: ${parsed.reason}`);
     return parsed;
   } catch (err) {
@@ -182,8 +188,8 @@ async function evaluateWithGroq(article) {
       headers: { Authorization: `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
       timeout: 30000
     });
-    const text = res.data.choices[0].message.content.trim().replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(text);
+    const text = res.data.choices[0].message.content;
+    const parsed = extractJson(text);
     console.log(`[BRAIN][GROQ] Decision: ${parsed.decision} | Scores: ${JSON.stringify(parsed.scores)}`);
     return parsed;
   } catch (err) {
@@ -193,8 +199,8 @@ async function evaluateWithGroq(article) {
 }
 
 async function sendToPabbly(article, evalResult) {
-  const rewrittenPost = typeof evalResult === 'string' ? evalResult : evalResult.rewrittenPost;
-  const commentLink = (typeof evalResult === 'object' && evalResult.commentLink) ? evalResult.commentLink : `🔗 মূল খবরের লিংক: ${article.link}`;
+  const rewrittenPost = (typeof evalResult === 'string' ? evalResult : (evalResult?.rewrittenPost || evalResult?.rewritten_post)) || `${article.title}\n\n👇 সংবাদের মূল লিংক প্রথম কমেন্টে দেখুন।`;
+  const commentLink = (typeof evalResult === 'object' && (evalResult.commentLink || evalResult.comment_link)) ? (evalResult.commentLink || evalResult.comment_link) : `🔗 মূল খবরের লিংক: ${article.link}`;
 
   if (!PABBLY_WEBHOOK_URL) {
     console.warn('[PUBLISH] PABBLY_WEBHOOK_URL not set - skipping publish (logging only)');
@@ -208,6 +214,8 @@ async function sendToPabbly(article, evalResult) {
     published_at: article.pubDate,
     rewritten_post: rewrittenPost,
     content: rewrittenPost,
+    message: rewrittenPost,
+    post_text: rewrittenPost,
     comment_link: commentLink,
     first_comment: commentLink,
     generated_at: new Date().toISOString()
@@ -225,8 +233,6 @@ async function sendToPabbly(article, evalResult) {
     console.error(`[PUBLISH] Failed: ${err.response ? `Status ${err.response.status} - ${JSON.stringify(err.response.data).slice(0, 300)}` : err.message}`);
     throw err;
   }
-  }
-}
 }
 
 let isRunning = false;
