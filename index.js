@@ -91,7 +91,8 @@ async function fetchRssArticles() {
         const link = (item.link || item.guid || '').trim();
         if (!link) continue;
         if (processed.has(link)) continue;
-        const title = (item.title || '').trim();
+        const rawTitle = typeof item.title === 'string' ? item.title : (item.title?.value || item.title?._ || item.title?.['$'] || '');
+        const title = String(rawTitle || '').trim();
         const content = (item.contentSnippet || item.content || item['content:encoded'] || '').trim();
         const pubDateStr = item.pubDate || item.isoDate || new Date().toISOString();
         if (!title) continue;
