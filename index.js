@@ -65,6 +65,8 @@ async function fetchRssArticles() {
   console.log(`[FETCHER] Feeds to check: ${RSS_FEED_URLS.length}`);
   const processed = loadProcessedUrls();
   const fresh = [];
+  const now = Date.now();
+  const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours max age
 
   for (let i = 0; i < RSS_FEED_URLS.length; i++) {
     const url = RSS_FEED_URLS[i];
@@ -78,13 +80,21 @@ async function fetchRssArticles() {
         if (processed.has(link)) continue;
         const title = (item.title || '').trim();
         const content = (item.contentSnippet || item.content || item['content:encoded'] || '').trim();
-        const pubDate = item.pubDate || item.isoDate || new Date().toISOString();
+        const pubDateStr = item.pubDate || item.isoDate || new Date().toISOString();
         if (!title) continue;
+
+        const pubDateMs = Date.parse(pubDateStr);
+        if (!isNaN(pubDateMs) && (now - pubDateMs) > MAX_AGE_MS) {
+          const hoursOld = Math.round((now - pubDateMs) / (1000 * 60 * 60));
+          console.log(`[FETCHER] Skipping stale news (${hoursOld}h old): "${title.slice(0, 50)}..."`);
+          continue;
+        }
+
         fresh.push({
           title,
           link,
           content: content.slice(0, 2000),
-          pubDate,
+          pubDate: pubDateStr,
           feedTitle: feed.title || url
         });
       }
@@ -94,8 +104,8 @@ async function fetchRssArticles() {
   }
 
   fresh.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-  console.log(`[FETCHER] Found ${fresh.length} fresh (unprocessed) articles`);
-  if (fresh.length > 0) console.log(`[FETCHER] Newest: "${fresh[0].title}"`);
+  console.log(`[FETCHER] Found ${fresh.length} fresh (today's unprocessed) articles`);
+  if (fresh.length > 0) console.log(`[FETCHER] Newest article: "${fresh[0].title}" (${fresh[0].pubDate})`);
   return { fresh, processed };
 }
 
