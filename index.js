@@ -60,6 +60,19 @@ function saveProcessedUrls(set) {
   }
 }
 
+const NAGORIK_DESK_FOLLOWED_ENTITIES = [
+  'জাতীয় সংসদ', 'বাংলাদেশ জাতীয় সংসদ', 'Parliament',
+  'আসিফ মাহমুদ', 'Asif Mahmud',
+  'চ্যানেল ওয়ান', 'Channel One',
+  'এনটিভি', 'NTV',
+  'যমুনা টেলিভিশন', 'যমুনা টিভি', 'Jamuna Television', 'Jamuna TV',
+  'শফিকুর রহমান', 'Shafiqur Rahman',
+  'নাহিদ ইসলাম', 'Nahid Islam',
+  'নাসিরুদ্দীন পাটওয়ারী', 'Nasiruddin Patwary',
+  'হাসনাত আব্দুল্লাহ', 'Hasnat Abdullah',
+  'প্রধানমন্ত্রীর কার্যালয়', 'প্রধান উপদেষ্টা', 'PMO Bangladesh', 'উপদেষ্টা'
+];
+
 async function fetchRssArticles() {
   console.log(`\n[FETCHER] Starting RSS fetch at ${new Date().toISOString()}`);
   console.log(`[FETCHER] Feeds to check: ${RSS_FEED_URLS.length}`);
@@ -90,12 +103,19 @@ async function fetchRssArticles() {
           continue;
         }
 
+        const isFollowedSource = NAGORIK_DESK_FOLLOWED_ENTITIES.some(entity =>
+          title.toLowerCase().includes(entity.toLowerCase()) ||
+          content.toLowerCase().includes(entity.toLowerCase()) ||
+          (feed.title || '').toLowerCase().includes(entity.toLowerCase())
+        );
+
         fresh.push({
           title,
           link,
           content: content.slice(0, 2000),
           pubDate: pubDateStr,
-          feedTitle: feed.title || url
+          feedTitle: feed.title || url,
+          isFollowedSource
         });
       }
     } catch (err) {
@@ -103,9 +123,16 @@ async function fetchRssArticles() {
     }
   }
 
-  fresh.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-  console.log(`[FETCHER] Found ${fresh.length} fresh (today's unprocessed) articles`);
-  if (fresh.length > 0) console.log(`[FETCHER] Newest article: "${fresh[0].title}" (${fresh[0].pubDate})`);
+  // Sort followed entity news first, then newest first
+  fresh.sort((a, b) => {
+    if (a.isFollowedSource && !b.isFollowedSource) return -1;
+    if (!a.isFollowedSource && b.isFollowedSource) return 1;
+    return new Date(b.pubDate) - new Date(a.pubDate);
+  });
+
+  const followedCount = fresh.filter(f => f.isFollowedSource).length;
+  console.log(`[FETCHER] Found ${fresh.length} fresh articles (${followedCount} matching Nagorik Desk followed entities)`);
+  if (fresh.length > 0) console.log(`[FETCHER] Selected top article: "${fresh[0].title}" [Followed Match: ${fresh[0].isFollowedSource ? 'YES' : 'NO'}] (${fresh[0].pubDate})`);
   return { fresh, processed };
 }
 
