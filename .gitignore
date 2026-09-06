@@ -4,3 +4,5 @@ data/processed.json
 npm-debug.log
 .DS_Store
 scratch*.js
+.archive/
+*.png

@@ -10,12 +10,13 @@ const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 10000;
-const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || 'https://www.prothomalo.com/feed,https://feeds.bbci.co.uk/bengali/rss.xml,https://www.thedailystar.net/news/bangladesh/rss.xml,https://feeds.bbci.co.uk/news/world/rss.xml')
+const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || 'https://www.prothomalo.com/feed,https://feeds.bbci.co.uk/bengali/rss.xml,https://www.thedailystar.net/news/bangladesh/rss.xml,https://www.ntvbd.com/rss.xml,https://www.channelionline.com/feed')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+const GROQ_MODEL = process.env.GROQ_MODEL || 'groq/compound-mini';
 const PABBLY_WEBHOOK_URL = process.env.PABBLY_WEBHOOK_URL || '';
 const MAX_POSTS_PER_CYCLE = parseInt(process.env.MAX_POSTS_PER_CYCLE || '2', 10);
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
@@ -61,16 +62,22 @@ function saveProcessedUrls(set) {
 }
 
 const NAGORIK_DESK_FOLLOWED_ENTITIES = [
+  // 10 Followed Entities & Key Figures from Nagorik Desk Page
+  'শফিকুর রহমান', 'Shafiqur Rahman', 'ডা. শফিকুর রহমান', 'আমীরে জামায়াত', 'আমিরে জামায়াত',
+  'জামায়াতে ইসলামী', 'বাংলাদেশ জামায়াতে ইসলামী', 'Jamaat', 'Jamaat-e-Islami', 'জামায়াত',
+  'ইসলামী ছাত্রশিবির', 'ছাত্রশিবির', 'Chhatra Shibir', 'শিবির',
   'জাতীয় সংসদ', 'বাংলাদেশ জাতীয় সংসদ', 'Parliament',
-  'আসিফ মাহমুদ', 'Asif Mahmud',
-  'চ্যানেল ওয়ান', 'Channel One',
-  'এনটিভি', 'NTV',
-  'যমুনা টেলিভিশন', 'যমুনা টিভি', 'Jamuna Television', 'Jamuna TV',
-  'শফিকুর রহমান', 'Shafiqur Rahman',
+  'আসিফ মাহমুদ', 'Asif Mahmud', 'Asif Mahmud Shojib Bhuyain',
   'নাহিদ ইসলাম', 'Nahid Islam',
-  'নাসিরুদ্দীন পাটওয়ারী', 'Nasiruddin Patwary',
+  'নাসিরুদ্দীন পাটওয়ারী', 'Nasiruddin Patwary', 'নাসিরউদ্দিন পাটোয়ারী',
   'হাসনাত আব্দুল্লাহ', 'Hasnat Abdullah',
-  'প্রধানমন্ত্রীর কার্যালয়', 'প্রধান উপদেষ্টা', 'PMO Bangladesh', 'উপদেষ্টা'
+  'এনটিভি', 'NTV', 'ntvdigital',
+  'যমুনা টেলিভিশন', 'যমুনা টিভি', 'Jamuna Television', 'Jamuna TV',
+  'চ্যানেল ওয়ান', 'Channel One', 'channelonenewslive',
+  'প্রধান উপদেষ্টা', 'ড. ইউনূস', 'Muhammad Yunus', 'উপদেষ্টা পরিষদ',
+  // Political monitoring keywords (critical watchdog on BNP)
+  'বিএনপি', 'BNP', 'তারেক রহমান', 'Tarique Rahman', 'মির্জা ফখরুল', 'Mirza Fakhrul',
+  'চাঁদাবাজি', 'দখলদারিত্ব', 'সংস্কার', 'নির্বাচনী রোডম্যাপ'
 ];
 
 async function fetchRssArticles() {
@@ -138,9 +145,18 @@ async function fetchRssArticles() {
 }
 
 function buildPrompt(article) {
-  return `You are a viral social media strategist and senior editor for 'NAGORIK DESK' (নাগরিক ডেস্ক).
+  return `You are a strategic political analyst, viral social media strategist, and senior editor for 'NAGORIK DESK' (নাগরিক ডেস্ক), focusing on Bangladeshi national politics and political developments.
 
-TASK: Evaluate the news article below on 3 criteria, then decide PASS or REJECT. If PASS, craft a highly viral, engaging Facebook post.
+EDITORIAL POLICY & STANCE:
+1. FOCUS: High-impact Bangladeshi political news, governance, national reforms, and political party actions (especially involving the entities followed by Nagorik Desk: Dr. Shafiqur Rahman / Jamaat-e-Islami, interim advisers Asif Mahmud / Nahid Islam / Nasiruddin Patwary, national media outlets like Jamuna TV / NTV, and Parliament).
+2. JAMAAT-E-ISLAMI PERSPECTIVE (PRO-JAMAAT):
+   - Highlight Dr. Shafiqur Rahman and Bangladesh Jamaat-e-Islami's disciplined leadership, constructive nation-building stance, anti-corruption drive, social welfare initiatives, and principled support for democratic state reforms.
+   - Present their statements and public gatherings with positive, dignified framing.
+3. CRITICAL WATCHDOG ON BNP (BNP-CRITICAL):
+   - Scrutinize and critically expose BNP's factional infighting, extortion/occupation (দখলদারিত্ব ও চাঁদাবাজি), impatience for power, controversies, double standards, or resistance to essential state reforms.
+   - Contrast destructive or opportunistic political conduct with the need for ethical, transparent politics.
+4. REJECT NON-POLITICAL OR TRIVIAL NEWS:
+   - Routine entertainment, minor crime, sports gossip, or irrelevant foreign fillers must be REJECTED. Focus strictly on political significance and national interest.
 
 ARTICLE:
 Title: ${article.title}
@@ -150,27 +166,27 @@ Snippet: ${article.content || article.title}
 Date: ${article.pubDate}
 
 EVALUATION CRITERIA (score 1-10 each):
-1. Newsworthiness - Is it timely, impactful, high-interest to general audience?
-2. Factual Clarity - Is it clear, specific, reliable?
-3. Viral Potential - Will people comment, share, or react?
+1. Political Impact & Relevance - Does it impact Bangladesh politics, governance, Jamaat, BNP, or national reform?
+2. Factual Clarity - Is the news credible, specific, and clear?
+3. Viral Discussion Potential - Will it provoke comments, engagement, and public debate?
 
 DECISION RULE: PASS only if all 3 scores >= 6 AND average >= 7. Otherwise REJECT.
 
 VIRAL WRITING FORMAT (IF PASS):
-- Write in clear, punchy, highly engaging language (prioritize Bengali for local/regional news, English for global tech/world news).
-- HOOK: 1 viral opening line with emojis (e.g. 🚨 ব্রেকিং নিউজ | 🔥 বড় তথ্য | ⚠️ আলোচিত খবর).
-- BODY: 2-3 short, scannable paragraphs highlighting key facts and real-world impact.
-- ENGAGEMENT QUESTION (Call to Action): 1 sentence asking readers for their opinion (e.g. "আপনার মতামত কী? কমেন্টে জানান! 👇").
-- HASHTAGS: 4-5 high-volume trending hashtags at end (e.g. #NagorikDesk #BreakingNews #Trending #NewsUpdate).
-- IMPORTANT: DO NOT put any http/https link URLs inside the main post body text (to prevent Facebook algorithm reach throttling). End the post body text with: "👇 সংবাদের মূল লিংক প্রথম কমেন্টে দেখুন।"
-- COMMENT LINK: Create a clean separate comment string: "🔗 মূল খবরের লিংক: ${article.link}"
+- LANGUAGE: Punchy, authoritative, highly engaging standard Bengali.
+- HOOK: 1 viral opening line with emojis (e.g. 🚨 ব্রেকিং নিউজ | 🔥 রাজনৈতিক অঙ্গনে তোলপাড় | ⚠️ বড় খবর | 📢 বড় তথ্য).
+- BODY: 2-3 short, scannable, high-impact paragraphs highlighting key facts, political implications, and public interest. Maintain the editorial stance naturally and factually.
+- ENGAGEMENT QUESTION (Call to Action): 1 provocative sentence inviting readers to share their opinion (e.g. "👇 এ বিষয়ে আপনার মতামত কী? কমেন্টে জানান!").
+- HASHTAGS: 4-5 high-volume trending hashtags at end (e.g. #NagorikDesk #BangladeshPolitics #Jamaat #BNP #Trending #NewsUpdate).
+- IMPORTANT: DO NOT put any http/https link URLs inside the post body text (to protect Facebook algorithmic reach). End post text with: "👇 সংবাদের মূল লিংক প্রথম কমেন্টে দেখুন।"
+- COMMENT LINK: Clean string: "🔗 মূল খবরের লিংক: ${article.link}"
 
 OUTPUT STRICT JSON ONLY (no markdown, no extra text):
 {
   "decision": "PASS" or "REJECT",
-  "scores": { "newsworthiness": 0, "factualClarity": 0, "viralPotential": 0 },
+  "scores": { "politicalImpact": 0, "factualClarity": 0, "viralPotential": 0 },
   "reason": "1 sentence reason",
-  "rewrittenPost": "full post text without external link",
+  "rewrittenPost": "full post text in Bengali without external link",
   "commentLink": "🔗 মূল খবরের লিংক: ${article.link}"
 }`;
 }
@@ -215,9 +231,9 @@ async function evaluateWithGroq(article) {
     console.log(`[BRAIN][GROQ] Evaluating: "${article.title.slice(0, 80)}..."`);
     const prompt = buildPrompt(article);
     const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-      model: 'groq/compound-mini',
+      model: GROQ_MODEL,
       messages: [
-        { role: 'system', content: 'You are a news editor for NAGORIK DESK. Output strict JSON only.' },
+        { role: 'system', content: 'You are a political news analyst and senior editor for NAGORIK DESK. Output strict JSON only.' },
         { role: 'user', content: prompt }
       ],
       temperature: 0.7,
@@ -276,6 +292,10 @@ async function sendToPabbly(article, evalResult) {
 let isRunning = false;
 
 async function runNewsCycle(trigger = 'cron') {
+  if (process.env.HOLD_POSTING === 'true') {
+    console.log('[CYCLE] Posting is currently ON HOLD by user request (HOLD_POSTING=true). Skipping cycle.');
+    return { skipped: true, reason: 'hold_posting_enabled' };
+  }
   if (isRunning) {
     console.log('[CYCLE] Already running, skipping duplicate trigger');
     return { skipped: true, reason: 'already_running' };
