@@ -6,3 +6,7 @@ npm-debug.log
 scratch*.js
 .archive/
 *.png
+public/cards/*
+!public/cards/.gitkeep
+data/recent_stories.json
+

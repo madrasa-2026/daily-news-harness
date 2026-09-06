@@ -5,9 +5,12 @@ const Parser = require('rss-parser');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const { generateNewsCard, CARDS_DIR } = require('./utils/cardGenerator');
+const { normalizeUrl, loadRecentStories, saveRecentStories, checkDuplicateStory } = require('./utils/dedup');
 
 const app = express();
 app.use(express.json());
+app.use('/cards', express.static(CARDS_DIR));
 
 const PORT = process.env.PORT || 10000;
 const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || 'https://www.prothomalo.com/feed,https://feeds.bbci.co.uk/bengali/rss.xml,https://www.thedailystar.net/news/bangladesh/rss.xml,https://www.ntvbd.com/rss.xml,https://www.channelionline.com/feed')
@@ -23,6 +26,7 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 
 const DATA_DIR = path.join(__dirname, 'data');
 const PROCESSED_FILE = path.join(DATA_DIR, 'processed.json');
+const RECENT_STORIES_FILE = path.join(DATA_DIR, 'recent_stories.json');
 
 const parser = new Parser({
   timeout: 15000,
@@ -84,6 +88,7 @@ async function fetchRssArticles() {
   console.log(`\n[FETCHER] Starting RSS fetch at ${new Date().toISOString()}`);
   console.log(`[FETCHER] Feeds to check: ${RSS_FEED_URLS.length}`);
   const processed = loadProcessedUrls();
+  const recentStories = loadRecentStories(RECENT_STORIES_FILE);
   const fresh = [];
   const now = Date.now();
   const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours max age
@@ -97,12 +102,20 @@ async function fetchRssArticles() {
       for (const item of feed.items) {
         const link = (item.link || item.guid || '').trim();
         if (!link) continue;
-        if (processed.has(link)) continue;
+        const normLink = normalizeUrl(link);
+        if (processed.has(link) || processed.has(normLink)) continue;
         const rawTitle = typeof item.title === 'string' ? item.title : (item.title?.value || item.title?._ || item.title?.['$'] || '');
         const title = String(rawTitle || '').trim();
         const content = (item.contentSnippet || item.content || item['content:encoded'] || '').trim();
         const pubDateStr = item.pubDate || item.isoDate || new Date().toISOString();
         if (!title) continue;
+
+        // Check cross-source duplicate stories from recent memory
+        const dupCheck = checkDuplicateStory({ title, link }, recentStories);
+        if (dupCheck.isDuplicate) {
+          console.log(`[FETCHER] Skipping duplicate story: "${title.slice(0, 50)}..." (${dupCheck.reason})`);
+          continue;
+        }
 
         const pubDateMs = Date.parse(pubDateStr);
         if (!isNaN(pubDateMs) && (now - pubDateMs) > MAX_AGE_MS) {
@@ -120,6 +133,7 @@ async function fetchRssArticles() {
         fresh.push({
           title,
           link,
+          normalizedUrl: normLink,
           content: content.slice(0, 2000),
           pubDate: pubDateStr,
           feedTitle: feed.title || url,
@@ -176,9 +190,15 @@ VIRAL WRITING FORMAT (IF PASS):
 - LANGUAGE: Punchy, authoritative, highly engaging standard Bengali.
 - HOOK: 1 viral opening line with emojis (e.g. 🚨 ব্রেকিং নিউজ | 🔥 রাজনৈতিক অঙ্গনে তোলপাড় | ⚠️ বড় খবর | 📢 বড় তথ্য).
 - BODY: 2-3 short, scannable, high-impact paragraphs highlighting key facts, political implications, and public interest. Maintain the editorial stance naturally and factually.
+- SOURCE & SPEAKER ATTRIBUTION RULES:
+  1. POLITICAL PERSON / LEADER NEWS: If the story quotes, features, or is based on a statement from a political leader (e.g. Dr. Shafiqur Rahman, interim advisers Asif Mahmud / Nahid Islam, Jamaat leadership, BNP figures):
+     - Attribute and reference that person prominently as the speaker/source (e.g. "🎙️ বক্তব্য / সূত্র: ডা. শফিকুর রহমান, আমীরে জামায়াত" or "🎙️ সূত্র: উপদেষ্টা আসিফ মাহমুদের বক্তব্য").
+     - DO NOT say "সংবাদের মূল লিংক প্রথম কমেন্টে দেখুন" when reporting direct political person statements.
+  2. NEWS MEDIA PORTAL NEWS: If the news is reported by a news outlet or portal (e.g. Prothom Alo, BBC Bangla, NTV, Channel i, Daily Star):
+     - Conclude with clear source attribution: "📌 তথ্যসূত্র: ${article.feedTitle || 'অনলাইন ডেস্ক'} | সংবাদের মূল লিংক প্রথম কমেন্টে দেখুন।"
 - ENGAGEMENT QUESTION (Call to Action): 1 provocative sentence inviting readers to share their opinion (e.g. "👇 এ বিষয়ে আপনার মতামত কী? কমেন্টে জানান!").
 - HASHTAGS: 4-5 high-volume trending hashtags at end (e.g. #NagorikDesk #BangladeshPolitics #Jamaat #BNP #Trending #NewsUpdate).
-- IMPORTANT: DO NOT put any http/https link URLs inside the post body text (to protect Facebook algorithmic reach). End post text with: "👇 সংবাদের মূল লিংক প্রথম কমেন্টে দেখুন।"
+- IMPORTANT: DO NOT put any http/https link URLs inside the post body text (to protect Facebook algorithmic reach).
 - COMMENT LINK: Clean string: "🔗 মূল খবরের লিংক: ${article.link}"
 
 OUTPUT STRICT JSON ONLY (no markdown, no extra text):
@@ -252,13 +272,17 @@ async function evaluateWithGroq(article) {
   }
 }
 
-async function sendToPabbly(article, evalResult) {
-  const rewrittenPost = (typeof evalResult === 'string' ? evalResult : (evalResult?.rewrittenPost || evalResult?.rewritten_post)) || `${article.title}\n\n👇 সংবাদের মূল লিংক প্রথম কমেন্টে দেখুন।`;
+async function sendToPabbly(article, evalResult, cardResult = null) {
+  const rewrittenPost = (typeof evalResult === 'string' ? evalResult : (evalResult?.rewrittenPost || evalResult?.rewritten_post)) || `${article.title}\n\n📌 তথ্যসূত্র: ${article.feedTitle || 'অনলাইন ডেস্ক'}`;
   const commentLink = (typeof evalResult === 'object' && (evalResult.commentLink || evalResult.comment_link)) ? (evalResult.commentLink || evalResult.comment_link) : `🔗 মূল খবরের লিংক: ${article.link}`;
+
+  const baseUrl = (process.env.RENDER_EXTERNAL_URL || process.env.APP_BASE_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
+  const photoUrl = cardResult ? `${baseUrl}${cardResult.relativeUrl}` : '';
 
   if (!PABBLY_WEBHOOK_URL) {
     console.warn('[PUBLISH] PABBLY_WEBHOOK_URL not set - skipping publish (logging only)');
     console.log(`[PUBLISH][DRY-RUN] Would send: ${rewrittenPost.slice(0, 200)}...`);
+    if (photoUrl) console.log(`[PUBLISH][DRY-RUN] Photo URL: ${photoUrl}`);
     return { dryRun: true };
   }
   const payload = {
@@ -270,12 +294,18 @@ async function sendToPabbly(article, evalResult) {
     content: rewrittenPost,
     message: rewrittenPost,
     post_text: rewrittenPost,
+    description: rewrittenPost, // Standard field for Facebook Page Photo Post in Pabbly
+    photo_url: photoUrl,
+    image_url: photoUrl,
+    card_url: photoUrl,
+    has_card: !!cardResult,
     comment_link: commentLink,
     first_comment: commentLink,
     generated_at: new Date().toISOString()
   };
   console.log(`[PUBLISH] Sending viral payload to Pabbly webhook...`);
   console.log(`[PUBLISH] URL: ${PABBLY_WEBHOOK_URL.slice(0, 60)}...`);
+  if (photoUrl) console.log(`[PUBLISH] Attached News Card: ${photoUrl}`);
   try {
     const res = await axios.post(PABBLY_WEBHOOK_URL, payload, {
       headers: { 'Content-Type': 'application/json' },
@@ -327,6 +357,7 @@ async function runNewsCycle(trigger = 'cron') {
         const result = GEMINI_API_KEY ? await evaluateWithGemini(article) : await evaluateWithGroq(article);
 
         processed.add(article.link);
+        if (article.normalizedUrl) processed.add(article.normalizedUrl);
         saveProcessedUrls(processed);
 
         if (result.decision === 'REJECT') {
@@ -335,10 +366,39 @@ async function runNewsCycle(trigger = 'cron') {
         }
 
         summary.passed++;
-        console.log(`[CYCLE] PASSED - rewriting ready, publishing...`);
+        console.log(`[CYCLE] PASSED - rewriting ready, generating news card & publishing...`);
         console.log(`[CYCLE] Rewritten preview: ${result.rewrittenPost.slice(0, 200)}...`);
 
-        await sendToPabbly(article, result);
+        // Generate high-resolution news card
+        let cardResult = null;
+        try {
+          cardResult = await generateNewsCard({
+            title: article.title,
+            snippet: article.content,
+            source: article.feedTitle,
+            link: article.link
+          });
+          if (cardResult) console.log(`[CYCLE] News card ready: ${cardResult.filename}`);
+        } catch (cardErr) {
+          console.warn(`[CYCLE] News card generation notice: ${cardErr.message}`);
+        }
+
+        await sendToPabbly(article, result, cardResult);
+
+        // Record in recent stories to prevent cross-source duplicates
+        try {
+          const recent = loadRecentStories(RECENT_STORIES_FILE);
+          recent.push({
+            title: article.title,
+            link: article.link,
+            normalizedUrl: article.normalizedUrl || normalizeUrl(article.link),
+            processedAt: Date.now()
+          });
+          saveRecentStories(RECENT_STORIES_FILE, recent);
+        } catch (recErr) {
+          console.warn(`[CYCLE] Failed to record recent story: ${recErr.message}`);
+        }
+
         publishedCount++;
         summary.published++;
         console.log(`[CYCLE] Published ${publishedCount}/${MAX_POSTS_PER_CYCLE} for this cycle`);
@@ -390,18 +450,19 @@ app.get('/', (req, res) => {
     <body>
       <div class="card">
         <h1>📰 NAGORIK DESK Publisher</h1>
-        <p>Automated Viral News Engine | 5 Posts/Day + On-Demand Exception Slot</p>
+        <p>Automated Viral News Engine | 9 Posts/Day (7 AM - 11 PM BST) + HD News Cards + Anti-Duplication</p>
         <div>
           <span class="badge">Status: Live</span>
           <span class="badge">Page: Nagorik Desk</span>
-          <span class="badge">Schedule: 5x Daily</span>
+          <span class="badge">Schedule: 9x Daily (07:00-23:00 BST)</span>
+          <span class="badge">Visuals: HD News Cards</span>
         </div>
         <br/>
         <button class="btn" onclick="triggerPost()">🚀 Post Now On-Demand (Exception Slot)</button>
         <div id="status" class="status"></div>
         <hr style="border-color: #334155; margin-top: 2rem;"/>
         <p style="font-size: 0.8rem; color: #64748b;">
-          Direct API Trigger: <a href="/trigger" style="color: #38bdf8;">/trigger</a> | Health: <a href="/health" style="color: #38bdf8;">/health</a>
+          Direct API Trigger: <a href="/trigger" style="color: #38bdf8;">/trigger</a> | Health: <a href="/health" style="color: #38bdf8;">/health</a> | Status: <a href="/status" style="color: #38bdf8;">/status</a>
         </p>
       </div>
       <script>
@@ -410,7 +471,7 @@ app.get('/', (req, res) => {
           el.style.display = 'block';
           el.style.color = '#38bdf8';
           el.style.background = '#1e3a8a';
-          el.innerText = '⌛ Triggering viral news cycle... fetching & rewriting...';
+          el.innerText = '⌛ Triggering viral news cycle... fetching, generating news card & publishing...';
           try {
             const res = await fetch('/trigger');
             const data = await res.json();
@@ -453,13 +514,23 @@ app.post('/trigger', async (req, res) => {
 
 app.get('/status', (req, res) => {
   const processed = loadProcessedUrls();
+  const recentStories = loadRecentStories(RECENT_STORIES_FILE);
+  let cardCount = 0;
+  try {
+    if (fs.existsSync(CARDS_DIR)) {
+      cardCount = fs.readdirSync(CARDS_DIR).filter(f => f.endsWith('.png')).length;
+    }
+  } catch {}
+
   res.json({
     status: 'ok',
     feeds: RSS_FEED_URLS,
     processedCount: processed.size,
+    recentStoriesCount: recentStories.length,
+    cardsGenerated: cardCount,
     llmConfigured: !!(GEMINI_API_KEY || GROQ_API_KEY),
     pabblyConfigured: !!PABBLY_WEBHOOK_URL,
-    cronSchedule: '0 */4 * * * (every 4 hours)',
+    cronSchedule: '0 1,3,5,7,9,11,13,15,17 * * * (9 times daily: 07:00 - 23:00 BST)',
     maxPostsPerCycle: MAX_POSTS_PER_CYCLE
   });
 });
@@ -471,6 +542,7 @@ if (require.main === module) {
     console.log(`[SERVER] Health: http://localhost:${PORT}/health`);
     console.log(`[SERVER] Ping: http://localhost:${PORT}/ping`);
     console.log(`[SERVER] Manual trigger: http://localhost:${PORT}/trigger`);
+    console.log(`[SERVER] Status: http://localhost:${PORT}/status`);
     console.log(`[SERVER] Feeds configured: ${RSS_FEED_URLS.length}`);
     console.log(`[SERVER] LLM: ${GEMINI_API_KEY ? 'Gemini (' + GEMINI_MODEL + ')' : GROQ_API_KEY ? 'Groq' : 'NOT SET - add GEMINI_API_KEY!'}`);
     console.log(`[SERVER] Pabbly: ${PABBLY_WEBHOOK_URL ? 'SET' : 'NOT SET - add PABBLY_WEBHOOK_URL!'}`);
@@ -480,15 +552,16 @@ if (require.main === module) {
   });
 }
 
-cron.schedule('0 0,5,10,15,20 * * *', () => {
+cron.schedule('0 1,3,5,7,9,11,13,15,17 * * *', () => {
   console.log(`[CRON] Triggered scheduled run at ${new Date().toISOString()}`);
   runNewsCycle('cron').catch(err => console.error('[CRON] Error:', err.message));
 });
 
-console.log('[CRON] Scheduled: 5 times daily at 00:00, 05:00, 10:00, 15:00, 20:00 UTC (0 0,5,10,15,20 * * *)');
+console.log('[CRON] Scheduled: 9 times daily at 01:00, 03:00, 05:00, 07:00, 09:00, 11:00, 13:00, 15:00, 17:00 UTC (07:00-23:00 BST)');
 console.log('[CRON] Keep-alive: ping /health every 5 min via cron-job.org');
 
 process.on('unhandledRejection', (err) => console.error('[UNHANDLED]', err));
 process.on('uncaughtException', (err) => console.error('[UNCAUGHT]', err));
 
-module.exports = { runNewsCycle, fetchRssArticles, sendToPabbly, evaluateWithGroq, evaluateWithGemini };
+module.exports = { app, runNewsCycle, fetchRssArticles, sendToPabbly, evaluateWithGroq, evaluateWithGemini };
+
