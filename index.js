@@ -29,7 +29,7 @@ const PROCESSED_FILE = path.join(DATA_DIR, 'processed.json');
 const RECENT_STORIES_FILE = path.join(DATA_DIR, 'recent_stories.json');
 
 const parser = new Parser({
-  timeout: 15000,
+  timeout: 8000,
   headers: { 'User-Agent': 'DailyNewsHarness/1.0 (+https://render.com)' }
 });
 
@@ -100,7 +100,8 @@ async function fetchRssArticles() {
       const feed = await parser.parseURL(url);
       console.log(`[FETCHER] Feed title: "${feed.title}" | Items: ${feed.items.length}`);
       for (const item of feed.items) {
-        const link = (item.link || item.guid || '').trim();
+        const rawLink = typeof item.link === 'string' ? item.link : (item.link?.['$']?.href || item.link?.href || item.guid || '');
+        const link = String(rawLink || '').trim();
         if (!link) continue;
         const normLink = normalizeUrl(link);
         if (processed.has(link) || processed.has(normLink)) continue;
@@ -283,12 +284,48 @@ async function evaluateWithGroq(article) {
   }
 }
 
+const DEFAULT_BRAND_PHOTO = 'https://files.catbox.moe/bofcs0.png';
+
+async function extractEditorialPhoto(url) {
+  if (!url) return null;
+  try {
+    const res = await axios.get(url, {
+      timeout: 7000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    const html = typeof res.data === 'string' ? res.data : '';
+    const match = html.match(/property=["']og:image["']\s+content=["'](.*?)["']/i) ||
+                  html.match(/content=["'](.*?)["']\s+property=["']og:image["']/i) ||
+                  html.match(/name=["']twitter:image["']\s+content=["'](.*?)["']/i) ||
+                  html.match(/content=["'](.*?)["']\s+name=["']twitter:image["']/i);
+    if (match && match[1]) {
+      let img = match[1].replace(/&amp;/g, '&').trim();
+      if (img.startsWith('//')) img = 'https:' + img;
+      if (img.startsWith('http://') || img.startsWith('https://')) {
+        console.log(`[PHOTO] Extracted genuine editorial press photo: ${img.slice(0, 100)}...`);
+        return img;
+      }
+    }
+  } catch (e) {
+    console.warn(`[PHOTO] Could not fetch og:image for ${url}: ${e.message}`);
+  }
+  return null;
+}
+
 async function sendToPabbly(article, evalResult, cardResult = null) {
   const rewrittenPost = (typeof evalResult === 'string' ? evalResult : (evalResult?.rewrittenPost || evalResult?.rewritten_post)) || `${article.title}\n\n📌 তথ্যসূত্র: ${article.feedTitle || 'অনলাইন ডেস্ক'}`;
   const commentLink = (typeof evalResult === 'object' && (evalResult.commentLink || evalResult.comment_link)) ? (evalResult.commentLink || evalResult.comment_link) : `🔗 মূল খবরের লিংক: ${article.link}`;
 
   const baseUrl = (process.env.RENDER_EXTERNAL_URL || process.env.APP_BASE_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
-  const photoUrl = (cardResult?.cdnUrl) || (cardResult ? `${baseUrl}${cardResult.relativeUrl}` : '');
+  
+  // Real press photography priority: card -> source article og:image -> official brand visual fallback
+  let photoUrl = (cardResult?.cdnUrl) || (cardResult ? `${baseUrl}${cardResult.relativeUrl}` : '');
+  if (!photoUrl) {
+    const editorialPhoto = await extractEditorialPhoto(article.link);
+    photoUrl = editorialPhoto || DEFAULT_BRAND_PHOTO;
+  }
 
   if (!PABBLY_WEBHOOK_URL) {
     console.warn('[PUBLISH] PABBLY_WEBHOOK_URL not set - skipping publish (logging only)');
