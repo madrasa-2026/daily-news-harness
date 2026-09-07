@@ -274,6 +274,25 @@ function buildCardHtml({ headline, subtext, category, source, dateStr }) {
 </html>`;
 }
 
+async function uploadToCdn(imagePath) {
+  try {
+    const fileBuffer = fs.readFileSync(imagePath);
+    const blob = new Blob([fileBuffer]);
+    const fd = new FormData();
+    fd.append('reqtype', 'fileupload');
+    fd.append('fileToUpload', blob, path.basename(imagePath));
+    const res = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: fd });
+    const url = (await res.text()).trim();
+    if (url.startsWith('http')) {
+      console.log(`[CARD] Uploaded to CDN: ${url}`);
+      return url;
+    }
+  } catch (e) {
+    console.warn(`[CARD] CDN upload notice: ${e.message}`);
+  }
+  return null;
+}
+
 async function generateNewsCard({ title, snippet, source, link }) {
   if (!puppeteer) {
     console.warn('[CARD] Puppeteer not installed, skipping news card generation');
@@ -291,7 +310,8 @@ async function generateNewsCard({ title, snippet, source, link }) {
 
   if (fs.existsSync(outputPath)) {
     console.log(`[CARD] Using cached news card: card_${cardId}.png`);
-    return { cardId, filename: `card_${cardId}.png`, relativeUrl: `/cards/card_${cardId}.png`, fullPath: outputPath };
+    const cdnUrl = await uploadToCdn(outputPath);
+    return { cardId, filename: `card_${cardId}.png`, relativeUrl: `/cards/card_${cardId}.png`, cdnUrl, fullPath: outputPath };
   }
 
   console.log(`[CARD] Generating news card for: "${title.slice(0, 60)}..."`);
@@ -326,10 +346,13 @@ async function generateNewsCard({ title, snippet, source, link }) {
     await page.screenshot({ path: outputPath, type: 'png' });
     console.log(`[CARD] Successfully generated card: ${outputPath}`);
 
+    const cdnUrl = await uploadToCdn(outputPath);
+
     return {
       cardId,
       filename: `card_${cardId}.png`,
       relativeUrl: `/cards/card_${cardId}.png`,
+      cdnUrl,
       fullPath: outputPath
     };
   } catch (err) {

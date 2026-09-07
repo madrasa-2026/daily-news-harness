@@ -1,10 +1,10 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const cron = require('node-cron');
 const Parser = require('rss-parser');
 const axios = require('axios');
 const fs = require('fs');
-const path = require('path');
 const { generateNewsCard, CARDS_DIR } = require('./utils/cardGenerator');
 const { normalizeUrl, loadRecentStories, saveRecentStories, checkDuplicateStory } = require('./utils/dedup');
 
@@ -162,14 +162,16 @@ function buildPrompt(article) {
   return `You are a strategic political analyst, viral social media strategist, and senior editor for 'NAGORIK DESK' (নাগরিক ডেস্ক), focusing on Bangladeshi national politics and political developments.
 
 EDITORIAL POLICY & STANCE:
-1. FOCUS: High-impact Bangladeshi political news, governance, national reforms, and political party actions (especially involving the entities followed by Nagorik Desk: Dr. Shafiqur Rahman / Jamaat-e-Islami, interim advisers Asif Mahmud / Nahid Islam / Nasiruddin Patwary, national media outlets like Jamuna TV / NTV, and Parliament).
+1. FOCUS: High-impact Bangladeshi political news, governance, national reforms, and political party actions (especially involving the entities followed by Nagorik Desk: Dr. Shafiqur Rahman / Jamaat-e-Islami, interim advisers Asif Mahmud / Nahid Islam / Nasiruddin Patwary, coordinators Hasnat Abdullah, national media outlets like Jamuna TV / NTV, and Parliament).
 2. JAMAAT-E-ISLAMI PERSPECTIVE (PRO-JAMAAT):
    - Highlight Dr. Shafiqur Rahman and Bangladesh Jamaat-e-Islami's disciplined leadership, constructive nation-building stance, anti-corruption drive, social welfare initiatives, and principled support for democratic state reforms.
    - Present their statements and public gatherings with positive, dignified framing.
 3. CRITICAL WATCHDOG ON BNP (BNP-CRITICAL):
    - Scrutinize and critically expose BNP's factional infighting, extortion/occupation (দখলদারিত্ব ও চাঁদাবাজি), impatience for power, controversies, double standards, or resistance to essential state reforms.
    - Contrast destructive or opportunistic political conduct with the need for ethical, transparent politics.
-4. REJECT NON-POLITICAL OR TRIVIAL NEWS:
+4. INTERIM GOVERNMENT & COORDINATORS:
+   - Constructive reporting on Chief Adviser Dr. Muhammad Yunus, key advisers (Asif Mahmud, Nahid Islam), and student coordinators.
+5. REJECT NON-POLITICAL OR TRIVIAL NEWS:
    - Routine entertainment, minor crime, sports gossip, or irrelevant foreign fillers must be REJECTED. Focus strictly on political significance and national interest.
 
 ARTICLE:
@@ -188,26 +190,35 @@ DECISION RULE: PASS only if all 3 scores >= 6 AND average >= 7. Otherwise REJECT
 
 VIRAL WRITING FORMAT (IF PASS):
 - LANGUAGE: Punchy, authoritative, highly engaging standard Bengali.
-- HOOK: 1 viral opening line with emojis (e.g. 🚨 ব্রেকিং নিউজ | 🔥 রাজনৈতিক অঙ্গনে তোলপাড় | ⚠️ বড় খবর | 📢 বড় তথ্য).
+- HOOK (DIVERSE & CONTEXTUAL): DO NOT ALWAYS USE 'ব্রেকিং নিউজ'. Dynamically select an appropriate high-voltage hook:
+  * ⚡ বিশেষ প্রতিবেদন | (for governance, constitutional, or parliamentary analysis)
+  * 🔥 রাজনৈতিক তোলপাড় | (for major political developments, sharp controversies, or clashes)
+  * 📢 বড় তথ্য সামনে এলো | or 📢 জরুরি বার্তা | (for major public disclosures, official statements, or policy shifts)
+  * ⚠️ দৃষ্টি আকর্ষণ | or ⚠️ বড় খবর | (for crucial updates, legal scrutiny, or cautionary developments)
+  * 📌 পর্দার আড়ালের খবর | (for insider party politics or backstage strategic moves)
+  * 🎙️ সরাসরি বক্তব্য | (when reporting a speech, press conference, or direct address)
+  * 🗳️ সংস্কার ও নির্বাচন | (for election commission, electoral reforms, or political roadmap)
+  * Or a dramatic direct quote hook: ❝বক্তব্যের মূল অংশ...❞
+  * Reserve 🚨 ব্রেকিং নিউজ | ONLY for fast-breaking immediate crises.
 - BODY: 2-3 short, scannable, high-impact paragraphs highlighting key facts, political implications, and public interest. Maintain the editorial stance naturally and factually.
 - SOURCE & SPEAKER ATTRIBUTION RULES:
-  1. POLITICAL PERSON / LEADER NEWS: If the story quotes, features, or is based on a statement from a political leader (e.g. Dr. Shafiqur Rahman, interim advisers Asif Mahmud / Nahid Islam, Jamaat leadership, BNP figures):
-     - Attribute and reference that person prominently as the speaker/source (e.g. "🎙️ বক্তব্য / সূত্র: ডা. শফিকুর রহমান, আমীরে জামায়াত" or "🎙️ সূত্র: উপদেষ্টা আসিফ মাহমুদের বক্তব্য").
-     - DO NOT say "সংবাদের মূল লিংক প্রথম কমেন্টে দেখুন" when reporting direct political person statements.
-  2. NEWS MEDIA PORTAL NEWS: If the news is reported by a news outlet or portal (e.g. Prothom Alo, BBC Bangla, NTV, Channel i, Daily Star):
-     - Conclude with clear source attribution: "📌 তথ্যসূত্র: ${article.feedTitle || 'অনলাইন ডেস্ক'} | সংবাদের মূল লিংক প্রথম কমেন্টে দেখুন।"
+  1. POLITICAL PERSON / LEADER NEWS: If the story features or quotes a political leader or coordinator (e.g. Dr. Shafiqur Rahman, Asif Mahmud, Nahid Islam, Hasnat Abdullah, Jamaat or BNP figures):
+     - Prominently mention the speaker: "🎙️ বক্তব্য: [বক্তার নাম ও পদবি]" or "🎙️ সূত্র: [বক্তার বক্তব্য]".
+  2. NEWS MEDIA PORTAL NEWS: If reporting from an online news media portal (e.g. Prothom Alo, BBC Bangla, NTV, Channel i, Daily Star):
+     - Conclude with clear, credible source attribution and the direct link:
+       "📌 তথ্যসূত্র: ${article.feedTitle || 'অনলাইন ডেস্ক'}
+🔗 মূল সংবাদের বিস্তারিত: ${article.link}"
+  3. NEVER SAY "সংবাদের মূল লিংক প্রথম কমেন্টে দেখুন" (do not promise comments that are not automatically posted).
 - ENGAGEMENT QUESTION (Call to Action): 1 provocative sentence inviting readers to share their opinion (e.g. "👇 এ বিষয়ে আপনার মতামত কী? কমেন্টে জানান!").
-- HASHTAGS: 4-5 high-volume trending hashtags at end (e.g. #NagorikDesk #BangladeshPolitics #Jamaat #BNP #Trending #NewsUpdate).
-- IMPORTANT: DO NOT put any http/https link URLs inside the post body text (to protect Facebook algorithmic reach).
-- COMMENT LINK: Clean string: "🔗 মূল খবরের লিংক: ${article.link}"
+- HASHTAGS: 4-5 high-volume trending hashtags at end (e.g. #NagorikDesk #BangladeshPolitics #Jamaat #BNP #Trending).
 
 OUTPUT STRICT JSON ONLY (no markdown, no extra text):
 {
   "decision": "PASS" or "REJECT",
   "scores": { "politicalImpact": 0, "factualClarity": 0, "viralPotential": 0 },
   "reason": "1 sentence reason",
-  "rewrittenPost": "full post text in Bengali without external link",
-  "commentLink": "🔗 মূল খবরের লিংক: ${article.link}"
+  "rewrittenPost": "full post text in Bengali with speaker/source attribution and direct link",
+  "commentLink": "🔗 মূল সংবাদের লিংক: ${article.link}"
 }`;
 }
 
@@ -277,7 +288,7 @@ async function sendToPabbly(article, evalResult, cardResult = null) {
   const commentLink = (typeof evalResult === 'object' && (evalResult.commentLink || evalResult.comment_link)) ? (evalResult.commentLink || evalResult.comment_link) : `🔗 মূল খবরের লিংক: ${article.link}`;
 
   const baseUrl = (process.env.RENDER_EXTERNAL_URL || process.env.APP_BASE_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
-  const photoUrl = cardResult ? `${baseUrl}${cardResult.relativeUrl}` : '';
+  const photoUrl = (cardResult?.cdnUrl) || (cardResult ? `${baseUrl}${cardResult.relativeUrl}` : '');
 
   if (!PABBLY_WEBHOOK_URL) {
     console.warn('[PUBLISH] PABBLY_WEBHOOK_URL not set - skipping publish (logging only)');
@@ -369,19 +380,8 @@ async function runNewsCycle(trigger = 'cron') {
         console.log(`[CYCLE] PASSED - rewriting ready, generating news card & publishing...`);
         console.log(`[CYCLE] Rewritten preview: ${result.rewrittenPost.slice(0, 200)}...`);
 
-        // Generate high-resolution news card
-        let cardResult = null;
-        try {
-          cardResult = await generateNewsCard({
-            title: article.title,
-            snippet: article.content,
-            source: article.feedTitle,
-            link: article.link
-          });
-          if (cardResult) console.log(`[CYCLE] News card ready: ${cardResult.filename}`);
-        } catch (cardErr) {
-          console.warn(`[CYCLE] News card generation notice: ${cardErr.message}`);
-        }
+        // Approach A: Pure high-impact text publishing (no synthetic/cheap AI image cards)
+        const cardResult = null;
 
         await sendToPabbly(article, result, cardResult);
 
@@ -549,16 +549,16 @@ if (require.main === module) {
     console.log(`========================================\n`);
 
     if (RSS_FEED_URLS.length === 0) console.warn('[SERVER] WARNING: RSS_FEED_URLS is empty!');
+
+    cron.schedule('0 1,3,5,7,9,11,13,15,17 * * *', () => {
+      console.log(`[CRON] Triggered scheduled run at ${new Date().toISOString()}`);
+      runNewsCycle('cron').catch(err => console.error('[CRON] Error:', err.message));
+    });
+
+    console.log('[CRON] Scheduled: 9 times daily at 01:00, 03:00, 05:00, 07:00, 09:00, 11:00, 13:00, 15:00, 17:00 UTC (07:00-23:00 BST)');
+    console.log('[CRON] Keep-alive: ping /health every 5 min via cron-job.org');
   });
 }
-
-cron.schedule('0 1,3,5,7,9,11,13,15,17 * * *', () => {
-  console.log(`[CRON] Triggered scheduled run at ${new Date().toISOString()}`);
-  runNewsCycle('cron').catch(err => console.error('[CRON] Error:', err.message));
-});
-
-console.log('[CRON] Scheduled: 9 times daily at 01:00, 03:00, 05:00, 07:00, 09:00, 11:00, 13:00, 15:00, 17:00 UTC (07:00-23:00 BST)');
-console.log('[CRON] Keep-alive: ping /health every 5 min via cron-job.org');
 
 process.on('unhandledRejection', (err) => console.error('[UNHANDLED]', err));
 process.on('uncaughtException', (err) => console.error('[UNCAUGHT]', err));
