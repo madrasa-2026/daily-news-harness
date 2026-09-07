@@ -320,33 +320,29 @@ async function sendToPabbly(article, evalResult, cardResult = null) {
 
   const baseUrl = (process.env.RENDER_EXTERNAL_URL || process.env.APP_BASE_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
   
-  // Real press photography priority: card -> source article og:image -> official brand visual fallback
-  let photoUrl = (cardResult?.cdnUrl) || (cardResult ? `${baseUrl}${cardResult.relativeUrl}` : '');
-  if (!photoUrl) {
-    const editorialPhoto = await extractEditorialPhoto(article.link);
-    photoUrl = editorialPhoto || DEFAULT_BRAND_PHOTO;
-  }
+  // Approach A: Pure high-impact text publishing with direct link (no third-party branding or logos)
+  const photoUrl = '';
 
   if (!PABBLY_WEBHOOK_URL) {
     console.warn('[PUBLISH] PABBLY_WEBHOOK_URL not set - skipping publish (logging only)');
     console.log(`[PUBLISH][DRY-RUN] Would send: ${rewrittenPost.slice(0, 200)}...`);
-    if (photoUrl) console.log(`[PUBLISH][DRY-RUN] Photo URL: ${photoUrl}`);
     return { dryRun: true };
   }
   const payload = {
     title: article.title,
     original_url: article.link,
+    link: article.link,
     source: article.feedTitle,
     published_at: article.pubDate,
     rewritten_post: rewrittenPost,
     content: rewrittenPost,
     message: rewrittenPost,
     post_text: rewrittenPost,
-    description: rewrittenPost, // Standard field for Facebook Page Photo Post in Pabbly
+    description: rewrittenPost,
     photo_url: photoUrl,
     image_url: photoUrl,
     card_url: photoUrl,
-    has_card: !!cardResult,
+    has_card: false,
     comment_link: commentLink,
     first_comment: commentLink,
     generated_at: new Date().toISOString()
