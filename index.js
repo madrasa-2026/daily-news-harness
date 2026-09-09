@@ -319,7 +319,7 @@ async function evaluateWithGroq(article) {
   }
 }
 
-const DEFAULT_BRAND_PHOTO = 'https://files.catbox.moe/bofcs0.png';
+const DEFAULT_BRAND_PHOTO = 'https://raw.githubusercontent.com/madrasa-2026/daily-news-harness/master/assets/nagorik_desk_brand.jpg';
 
 async function extractEditorialPhoto(url) {
   if (!url) return null;
@@ -355,8 +355,8 @@ async function sendToPabbly(article, evalResult, cardResult = null) {
 
   const baseUrl = (process.env.RENDER_EXTERNAL_URL || process.env.APP_BASE_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
   
-  // Approach A: Pure high-impact text publishing with direct link (no third-party branding or logos)
-  const photoUrl = '';
+  // Official Nagorik Desk brand photo (clean, high-resolution, no third-party branding or logos)
+  const photoUrl = process.env.PURE_TEXT_ONLY === 'true' ? '' : DEFAULT_BRAND_PHOTO;
 
   if (!PABBLY_WEBHOOK_URL) {
     console.warn('[PUBLISH] PABBLY_WEBHOOK_URL not set - skipping publish (logging only)');
