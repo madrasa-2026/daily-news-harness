@@ -13,17 +13,29 @@ app.use(express.json());
 app.use('/cards', express.static(CARDS_DIR));
 
 const PORT = process.env.PORT || 10000;
-const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || 'https://www.prothomalo.com/feed,https://feeds.bbci.co.uk/bengali/rss.xml,https://www.thedailystar.net/news/bangladesh/rss.xml,https://www.ntvbd.com/rss.xml,https://www.channelionline.com/feed')
+
+// Load secure cloud configuration fallback from private repository
+const cloudConfigFile = path.join(__dirname, 'config.production.json');
+let cloudConfig = {};
+if (fs.existsSync(cloudConfigFile)) {
+  try {
+    cloudConfig = JSON.parse(fs.readFileSync(cloudConfigFile, 'utf8'));
+  } catch (e) {
+    console.warn('[CONFIG] Could not parse config.production.json:', e.message);
+  }
+}
+
+const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || cloudConfig.RSS_FEED_URLS || 'https://www.prothomalo.com/feed,https://feeds.bbci.co.uk/bengali/rss.xml,https://www.thedailystar.net/news/bangladesh/rss.xml,https://www.ntvbd.com/rss.xml,https://www.channelionline.com/feed')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
-const GROQ_MODEL = process.env.GROQ_MODEL || 'groq/compound-mini';
-const PABBLY_WEBHOOK_URL = process.env.PABBLY_WEBHOOK_URL || '';
-const MAX_POSTS_PER_CYCLE = parseInt(process.env.MAX_POSTS_PER_CYCLE || '2', 10);
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
-const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '0 1,3,5,7,9,11,13,15,17 * * *';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || cloudConfig.GEMINI_API_KEY || '';
+const GROQ_API_KEY = process.env.GROQ_API_KEY || cloudConfig.GROQ_API_KEY || '';
+const GROQ_MODEL = process.env.GROQ_MODEL || cloudConfig.GROQ_MODEL || 'groq/compound-mini';
+const PABBLY_WEBHOOK_URL = process.env.PABBLY_WEBHOOK_URL || cloudConfig.PABBLY_WEBHOOK_URL || '';
+const MAX_POSTS_PER_CYCLE = parseInt(process.env.MAX_POSTS_PER_CYCLE || cloudConfig.MAX_POSTS_PER_CYCLE || '1', 10);
+const GEMINI_MODEL = process.env.GEMINI_MODEL || cloudConfig.GEMINI_MODEL || 'gemini-1.5-flash';
+const CRON_SCHEDULE = process.env.CRON_SCHEDULE || cloudConfig.CRON_SCHEDULE || '0 */2 * * *';
 
 const DATA_DIR = path.join(__dirname, 'data');
 const PROCESSED_FILE = path.join(DATA_DIR, 'processed.json');
