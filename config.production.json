@@ -5,5 +5,6 @@
   "RSS_FEED_URLS": "https://www.prothomalo.com/feed,https://feeds.bbci.co.uk/bengali/rss.xml,https://www.thedailystar.net/news/bangladesh/rss.xml,https://www.ntvbd.com/rss.xml,https://www.channelionline.com/feed",
   "MAX_POSTS_PER_CYCLE": 1,
   "HOLD_POSTING": "false",
+  "PURE_TEXT_ONLY": "true",
   "CRON_SCHEDULE": "0 */2 * * *"
 }

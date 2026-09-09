@@ -367,8 +367,8 @@ async function sendToPabbly(article, evalResult, cardResult = null) {
 
   const baseUrl = (process.env.RENDER_EXTERNAL_URL || process.env.APP_BASE_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
   
-  // Official Nagorik Desk brand photo (clean, high-resolution, no third-party branding or logos)
-  const photoUrl = process.env.PURE_TEXT_ONLY === 'true' ? '' : DEFAULT_BRAND_PHOTO;
+  // STRICT PURE TEXT MODE: NO IMAGE (User explicitly instructed: JUST TEXT, NO IMAGE)
+  const photoUrl = '';
 
   if (!PABBLY_WEBHOOK_URL) {
     console.warn('[PUBLISH] PABBLY_WEBHOOK_URL not set - skipping publish (logging only)');
