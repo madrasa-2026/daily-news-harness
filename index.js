@@ -23,6 +23,7 @@ const GROQ_MODEL = process.env.GROQ_MODEL || 'groq/compound-mini';
 const PABBLY_WEBHOOK_URL = process.env.PABBLY_WEBHOOK_URL || '';
 const MAX_POSTS_PER_CYCLE = parseInt(process.env.MAX_POSTS_PER_CYCLE || '2', 10);
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '0 1,3,5,7,9,11,13,15,17 * * *';
 
 const DATA_DIR = path.join(__dirname, 'data');
 const PROCESSED_FILE = path.join(DATA_DIR, 'processed.json');
@@ -84,6 +85,42 @@ const NAGORIK_DESK_FOLLOWED_ENTITIES = [
   'চাঁদাবাজি', 'দখলদারিত্ব', 'সংস্কার', 'নির্বাচনী রোডম্যাপ'
 ];
 
+function extractItemTitle(item) {
+  if (!item || !item.title) return '';
+  if (typeof item.title === 'string') return item.title.trim();
+  if (Array.isArray(item.title?.a) && item.title.a[0]?._) return String(item.title.a[0]._).trim();
+  if (Array.isArray(item.title?.a) && item.title.a[0]) return String(item.title.a[0]).trim();
+  if (item.title?._) return String(item.title._).trim();
+  if (item.title?.value) return String(item.title.value).trim();
+  if (item.title?.['$']) return String(item.title['$']).trim();
+  if (typeof item.title === 'object') {
+    for (const val of Object.values(item.title)) {
+      if (typeof val === 'string' && val.trim()) return val.trim();
+      if (val && typeof val === 'object' && val._) return String(val._).trim();
+      if (Array.isArray(val) && val[0]?._) return String(val[0]._).trim();
+      if (Array.isArray(val) && typeof val[0] === 'string') return String(val[0]).trim();
+    }
+  }
+  return String(item.title).trim();
+}
+
+function extractItemLink(item) {
+  if (!item) return '';
+  const raw = item.link || item.guid || item.origlink || '';
+  if (typeof raw === 'string') return raw.trim();
+  if (Array.isArray(raw?.a) && raw.a[0]?.['$']?.href) return String(raw.a[0]['$'].href).trim();
+  if (raw?.['$']?.href) return String(raw['$'].href).trim();
+  if (raw?.href) return String(raw.href).trim();
+  if (raw?._) return String(raw._).trim();
+  if (typeof raw === 'object') {
+    for (const val of Object.values(raw)) {
+      if (typeof val === 'string' && val.startsWith('http')) return val.trim();
+      if (val?.href) return String(val.href).trim();
+    }
+  }
+  return String(raw).trim();
+}
+
 async function fetchRssArticles() {
   console.log(`\n[FETCHER] Starting RSS fetch at ${new Date().toISOString()}`);
   console.log(`[FETCHER] Feeds to check: ${RSS_FEED_URLS.length}`);
@@ -100,13 +137,11 @@ async function fetchRssArticles() {
       const feed = await parser.parseURL(url);
       console.log(`[FETCHER] Feed title: "${feed.title}" | Items: ${feed.items.length}`);
       for (const item of feed.items) {
-        const rawLink = typeof item.link === 'string' ? item.link : (item.link?.['$']?.href || item.link?.href || item.guid || '');
-        const link = String(rawLink || '').trim();
+        const link = extractItemLink(item);
         if (!link) continue;
         const normLink = normalizeUrl(link);
         if (processed.has(link) || processed.has(normLink)) continue;
-        const rawTitle = typeof item.title === 'string' ? item.title : (item.title?.value || item.title?._ || item.title?.['$'] || '');
-        const title = String(rawTitle || '').trim();
+        const title = extractItemTitle(item);
         const content = (item.contentSnippet || item.content || item['content:encoded'] || '').trim();
         const pubDateStr = item.pubDate || item.isoDate || new Date().toISOString();
         if (!title) continue;
@@ -563,9 +598,54 @@ app.get('/status', (req, res) => {
     cardsGenerated: cardCount,
     llmConfigured: !!(GEMINI_API_KEY || GROQ_API_KEY),
     pabblyConfigured: !!PABBLY_WEBHOOK_URL,
-    cronSchedule: '0 1,3,5,7,9,11,13,15,17 * * * (9 times daily: 07:00 - 23:00 BST)',
+    cronSchedule: CRON_SCHEDULE,
     maxPostsPerCycle: MAX_POSTS_PER_CYCLE
   });
+});
+
+app.get('/audit', async (req, res) => {
+  const auditResults = {
+    timestamp: new Date().toISOString(),
+    uptimeSeconds: Math.round(process.uptime()),
+    nodeVersion: process.version,
+    env: {
+      port: PORT,
+      llmProvider: GEMINI_API_KEY ? 'Gemini' : GROQ_API_KEY ? 'Groq' : 'NONE',
+      llmConfigured: !!(GEMINI_API_KEY || GROQ_API_KEY),
+      groqModel: GROQ_MODEL,
+      pabblyConfigured: !!PABBLY_WEBHOOK_URL,
+      pabblyUrlMasked: PABBLY_WEBHOOK_URL ? PABBLY_WEBHOOK_URL.slice(0, 45) + '...' : 'NOT_SET',
+      maxPostsPerCycle: MAX_POSTS_PER_CYCLE,
+      cronSchedule: CRON_SCHEDULE,
+      holdPosting: process.env.HOLD_POSTING === 'true'
+    },
+    feeds: []
+  };
+
+  for (const url of RSS_FEED_URLS) {
+    const t0 = Date.now();
+    try {
+      const feed = await parser.parseURL(url);
+      const firstTitle = feed.items.length > 0 ? extractItemTitle(feed.items[0]) : '';
+      auditResults.feeds.push({
+        url,
+        status: 'OK',
+        title: feed.title || 'Untitled',
+        itemsCount: feed.items.length,
+        latencyMs: Date.now() - t0,
+        sampleItemTitle: firstTitle.slice(0, 60)
+      });
+    } catch (e) {
+      auditResults.feeds.push({
+        url,
+        status: 'FAILED',
+        error: e.message,
+        latencyMs: Date.now() - t0
+      });
+    }
+  }
+
+  res.json(auditResults);
 });
 
 if (require.main === module) {
@@ -576,6 +656,7 @@ if (require.main === module) {
     console.log(`[SERVER] Ping: http://localhost:${PORT}/ping`);
     console.log(`[SERVER] Manual trigger: http://localhost:${PORT}/trigger`);
     console.log(`[SERVER] Status: http://localhost:${PORT}/status`);
+    console.log(`[SERVER] Full Audit: http://localhost:${PORT}/audit`);
     console.log(`[SERVER] Feeds configured: ${RSS_FEED_URLS.length}`);
     console.log(`[SERVER] LLM: ${GEMINI_API_KEY ? 'Gemini (' + GEMINI_MODEL + ')' : GROQ_API_KEY ? 'Groq' : 'NOT SET - add GEMINI_API_KEY!'}`);
     console.log(`[SERVER] Pabbly: ${PABBLY_WEBHOOK_URL ? 'SET' : 'NOT SET - add PABBLY_WEBHOOK_URL!'}`);
@@ -583,12 +664,12 @@ if (require.main === module) {
 
     if (RSS_FEED_URLS.length === 0) console.warn('[SERVER] WARNING: RSS_FEED_URLS is empty!');
 
-    cron.schedule('0 1,3,5,7,9,11,13,15,17 * * *', () => {
+    cron.schedule(CRON_SCHEDULE, () => {
       console.log(`[CRON] Triggered scheduled run at ${new Date().toISOString()}`);
       runNewsCycle('cron').catch(err => console.error('[CRON] Error:', err.message));
     });
 
-    console.log('[CRON] Scheduled: 9 times daily at 01:00, 03:00, 05:00, 07:00, 09:00, 11:00, 13:00, 15:00, 17:00 UTC (07:00-23:00 BST)');
+    console.log(`[CRON] Scheduled: ${CRON_SCHEDULE}`);
     console.log('[CRON] Keep-alive: ping /health every 5 min via cron-job.org');
   });
 }
