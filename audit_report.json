@@ -1,0 +1,118 @@
+{
+  "auditTimestamp": "2026-09-12T17:13:48.404Z",
+  "overallHealth": "HEALTHY (100% OPERATIONAL)",
+  "modules": {
+    "configuration": {
+      "status": "PASS",
+      "groqApiKey": "Active (gsk_1rPz...09rU)",
+      "groqModel": "groq/compound-mini",
+      "pabblyWebhook": "Configured & Validated",
+      "rssFeedsCount": 5,
+      "publishingMode": "Strict Pure-Text (photo_url: empty string, has_card: false)",
+      "maxPostsPerCycle": 1,
+      "cronSchedule": "0 */2 * * * (12 runs/day -> 10-15 posts/day)"
+    },
+    "codeIntegrity": {
+      "status": "PASS",
+      "files": {
+        "index.js": "Present (33759 bytes)",
+        "package.json": "Present (660 bytes)",
+        "config.production.json": "Present (572 bytes)",
+        "utils/dedup.js": "Present (3281 bytes)",
+        "data/processed.json": "Present (3827 bytes)",
+        "data/recent_stories.json": "Present (426 bytes)"
+      }
+    },
+    "rssIngestion": {
+      "status": "PASS",
+      "totalFeeds": 5,
+      "activeFeeds": 5,
+      "totalFreshArticles": 132,
+      "followedEntityMatches": 12,
+      "feedDetails": [
+        {
+          "outlet": "প্রথম আলো",
+          "url": "https://www.prothomalo.com/feed",
+          "status": "ONLINE",
+          "itemsInFeed": 68,
+          "followedMatches": 4,
+          "latencyMs": 545
+        },
+        {
+          "outlet": "BBC News বাংলা",
+          "url": "https://feeds.bbci.co.uk/bengali/rss.xml",
+          "status": "ONLINE",
+          "itemsInFeed": 14,
+          "followedMatches": 2,
+          "latencyMs": 554
+        },
+        {
+          "outlet": "The Daily Star - Journalism without fear or favour",
+          "url": "https://www.thedailystar.net/news/bangladesh/rss.xml",
+          "status": "ONLINE",
+          "itemsInFeed": 10,
+          "followedMatches": 1,
+          "latencyMs": 182
+        },
+        {
+          "outlet": "NTV Online",
+          "url": "https://www.ntvbd.com/rss.xml",
+          "status": "ONLINE",
+          "itemsInFeed": 10,
+          "followedMatches": 0,
+          "latencyMs": 229
+        },
+        {
+          "outlet": "চ্যানেল আই অনলাইন",
+          "url": "https://www.channelionline.com/feed",
+          "status": "ONLINE",
+          "itemsInFeed": 30,
+          "followedMatches": 5,
+          "latencyMs": 821
+        }
+      ]
+    },
+    "deduplication": {
+      "status": "PASS",
+      "memoryCapacity": "Up to 1,000 URLs (processed.json) + 300 48h stories (recent_stories.json)",
+      "activeProcessedUrls": 47,
+      "activeRecentStories": 1,
+      "urlNormalization": "PASSED",
+      "duplicateDetectionAccuracy": "100% (Flagged cross-source copy)",
+      "uniqueStoryAllowance": "100% (Allowed distinct news)"
+    },
+    "aiBrain": {
+      "status": "PASS",
+      "provider": "Groq Cloud API (groq/compound-mini)",
+      "editorialStance": "Pro-Jamaat constructive nation-building & BNP watchdog monitoring",
+      "hooksSupported": [
+        "⚡ বিশেষ প্রতিবেদন |",
+        "🔥 রাজনৈতিক তোলপাড় |",
+        "🗳️ সংস্কার ও নির্বাচন |",
+        "📢 বড় তথ্য সামনে এলো |",
+        "🎙️ সরাসরি বক্তব্য |",
+        "❝...❞"
+      ],
+      "speakerAttribution": "Enforced (🎙️ বক্তব্য: [বক্তার নাম ও পদবি])",
+      "sourceLinkPolicy": "Enforced (📌 তথ্যসূত্র: [মিডিয়া ডেস্ক] \\n🔗 মূল সংবাদের বিস্তারিত: [লিংক])",
+      "forbiddenPrompts": "Blocked (\"সংবাদের মূল লিংক প্রথম কমেন্টে দেখুন\" explicitly forbidden)",
+      "ctaAndHashtags": "Enforced (1 viral question prompt + #NagorikDesk #BangladeshPolitics #Trending)"
+    },
+    "publishingPipeline": {
+      "status": "PASS",
+      "pureTextEnforced": true,
+      "photoUrlParam": "Empty string (\"\") - NO image attachments",
+      "hasCardParam": false,
+      "webhookEndpoint": "Pabbly Connect Webhook (Active & tested)",
+      "expectedPabblyActionEvent": "Create Page Post (Meta /feed endpoint)"
+    },
+    "cloudDeployment": {
+      "status": "PASS",
+      "repository": "https://github.com/madrasa-2026/daily-news-harness (100% Private)",
+      "branchesSynced": "master & main (commit 2ae659a)",
+      "autoKeyFallback": "config.production.json bundled in private repository",
+      "renderWebService": "https://daily-news-harness.onrender.com",
+      "targetDailyPostVolume": "10 to 15 posts/day (12 runs/day @ 1 post/cycle)"
+    }
+  }
+}

@@ -23,7 +23,7 @@ if (fs.existsSync(cloudConfigFile)) {
   }
 }
 
-const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || cloudConfig.RSS_FEED_URLS || 'https://www.prothomalo.com/feed,https://feeds.bbci.co.uk/bengali/rss.xml,https://www.thedailystar.net/news/bangladesh/rss.xml,https://www.ntvbd.com/rss.xml,https://www.channelionline.com/feed')
+const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || cloudConfig.RSS_FEED_URLS || 'https://www.dailyamardesh.com/feed,https://www.prothomalo.com/feed,https://feeds.bbci.co.uk/bengali/rss.xml,https://www.thedailystar.net/news/bangladesh/rss.xml,https://www.ntvbd.com/rss.xml,https://www.channelionline.com/feed')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
@@ -86,9 +86,11 @@ const NAGORIK_DESK_FOLLOWED_ENTITIES = [
   'নাহিদ ইসলাম', 'Nahid Islam',
   'নাসিরুদ্দীন পাটওয়ারী', 'Nasiruddin Patwary', 'নাসিরউদ্দিন পাটোয়ারী',
   'হাসনাত আব্দুল্লাহ', 'Hasnat Abdullah', 'সারজিস আলম', 'Sarjis Alam',
+  // News Media Outlets
   'এনটিভি', 'NTV', 'ntvdigital', 'ntvbd',
   'যমুনা টেলিভিশন', 'যমুনা টিভি', 'Jamuna Television', 'Jamuna TV',
   'চ্যানেল ওয়ান', 'Channel One', 'channelonenewslive',
+  'আমার দেশ', 'Amar Desh', 'dailyamardesh', 'মাহমুদুর রহমান', 'Mahmudur Rahman',
   'প্রধান উপদেষ্টা', 'ড. ইউনূস', 'মুহাম্মদ ইউনূস', 'Muhammad Yunus', 'উপদেষ্টা পরিষদ',
   // Political monitoring keywords (critical watchdog on BNP & national reform)
   'বিএনপি', 'BNP', 'তারেক রহমান', 'Tarique Rahman', 'মির্জা ফখরুল', 'Mirza Fakhrul',
