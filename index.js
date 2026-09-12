@@ -5,12 +5,10 @@ const cron = require('node-cron');
 const Parser = require('rss-parser');
 const axios = require('axios');
 const fs = require('fs');
-const { generateNewsCard, CARDS_DIR } = require('./utils/cardGenerator');
 const { normalizeUrl, loadRecentStories, saveRecentStories, checkDuplicateStory } = require('./utils/dedup');
 
 const app = express();
 app.use(express.json());
-app.use('/cards', express.static(CARDS_DIR));
 
 const PORT = process.env.PORT || 10000;
 
@@ -83,18 +81,18 @@ const NAGORIK_DESK_FOLLOWED_ENTITIES = [
   'শফিকুর রহমান', 'Shafiqur Rahman', 'ডা. শফিকুর রহমান', 'আমীরে জামায়াত', 'আমিরে জামায়াত',
   'জামায়াতে ইসলামী', 'বাংলাদেশ জামায়াতে ইসলামী', 'Jamaat', 'Jamaat-e-Islami', 'জামায়াত',
   'ইসলামী ছাত্রশিবির', 'ছাত্রশিবির', 'Chhatra Shibir', 'শিবির',
-  'জাতীয় সংসদ', 'বাংলাদেশ জাতীয় সংসদ', 'Parliament',
-  'আসিফ মাহমুদ', 'Asif Mahmud', 'Asif Mahmud Shojib Bhuyain',
+  'জাতীয় সংসদ', 'বাংলাদেশ জাতীয় সংসদ', 'জাতীয় সংসদ ভবন', 'সংসদ', 'Parliament',
+  'আসিফ মাহমুদ', 'Asif Mahmud', 'Asif Mahmud Shojib Bhuyain', 'সজীব ভূঁইয়া',
   'নাহিদ ইসলাম', 'Nahid Islam',
   'নাসিরুদ্দীন পাটওয়ারী', 'Nasiruddin Patwary', 'নাসিরউদ্দিন পাটোয়ারী',
-  'হাসনাত আব্দুল্লাহ', 'Hasnat Abdullah',
-  'এনটিভি', 'NTV', 'ntvdigital',
+  'হাসনাত আব্দুল্লাহ', 'Hasnat Abdullah', 'সারজিস আলম', 'Sarjis Alam',
+  'এনটিভি', 'NTV', 'ntvdigital', 'ntvbd',
   'যমুনা টেলিভিশন', 'যমুনা টিভি', 'Jamuna Television', 'Jamuna TV',
   'চ্যানেল ওয়ান', 'Channel One', 'channelonenewslive',
-  'প্রধান উপদেষ্টা', 'ড. ইউনূস', 'Muhammad Yunus', 'উপদেষ্টা পরিষদ',
-  // Political monitoring keywords (critical watchdog on BNP)
+  'প্রধান উপদেষ্টা', 'ড. ইউনূস', 'মুহাম্মদ ইউনূস', 'Muhammad Yunus', 'উপদেষ্টা পরিষদ',
+  // Political monitoring keywords (critical watchdog on BNP & national reform)
   'বিএনপি', 'BNP', 'তারেক রহমান', 'Tarique Rahman', 'মির্জা ফখরুল', 'Mirza Fakhrul',
-  'চাঁদাবাজি', 'দখলদারিত্ব', 'সংস্কার', 'নির্বাচনী রোডম্যাপ'
+  'চাঁদাবাজি', 'দখলদারিত্ব', 'সংস্কার', 'রাষ্ট্র সংস্কার', 'নির্বাচনী রোডম্যাপ', 'নির্বাচন কমিশন'
 ];
 
 function extractItemTitle(item) {
@@ -193,17 +191,19 @@ async function fetchRssArticles() {
     }
   }
 
-  // Sort followed entity news first, then newest first
-  fresh.sort((a, b) => {
-    if (a.isFollowedSource && !b.isFollowedSource) return -1;
-    if (!a.isFollowedSource && b.isFollowedSource) return 1;
-    return new Date(b.pubDate) - new Date(a.pubDate);
-  });
+  // Strictly prioritize followed entity news from Nagorik Desk
+  const followedFresh = fresh.filter(f => f.isFollowedSource);
+  const eligibleFresh = followedFresh.length > 0 ? followedFresh : fresh;
 
-  const followedCount = fresh.filter(f => f.isFollowedSource).length;
-  console.log(`[FETCHER] Found ${fresh.length} fresh articles (${followedCount} matching Nagorik Desk followed entities)`);
-  if (fresh.length > 0) console.log(`[FETCHER] Selected top article: "${fresh[0].title}" [Followed Match: ${fresh[0].isFollowedSource ? 'YES' : 'NO'}] (${fresh[0].pubDate})`);
-  return { fresh, processed };
+  // Sort newest first
+  eligibleFresh.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+
+  const followedCount = eligibleFresh.filter(f => f.isFollowedSource).length;
+  console.log(`[FETCHER] Found ${fresh.length} total fresh articles (${followedCount} strictly matching Nagorik Desk followed entities)`);
+  if (eligibleFresh.length > 0) {
+    console.log(`[FETCHER] Selected top article: "${eligibleFresh[0].title}" [Followed Match: ${eligibleFresh[0].isFollowedSource ? 'YES' : 'NO'}] (${eligibleFresh[0].pubDate})`);
+  }
+  return { fresh: eligibleFresh, processed };
 }
 
 function buildPrompt(article) {
@@ -595,12 +595,7 @@ app.post('/trigger', async (req, res) => {
 app.get('/status', (req, res) => {
   const processed = loadProcessedUrls();
   const recentStories = loadRecentStories(RECENT_STORIES_FILE);
-  let cardCount = 0;
-  try {
-    if (fs.existsSync(CARDS_DIR)) {
-      cardCount = fs.readdirSync(CARDS_DIR).filter(f => f.endsWith('.png')).length;
-    }
-  } catch {}
+  const cardCount = 0;
 
   res.json({
     status: 'ok',
