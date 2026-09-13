@@ -172,11 +172,20 @@ async function fetchRssArticles() {
           continue;
         }
 
-        const isFollowedSource = NAGORIK_DESK_FOLLOWED_ENTITIES.some(entity =>
-          title.toLowerCase().includes(entity.toLowerCase()) ||
-          content.toLowerCase().includes(entity.toLowerCase()) ||
-          (feed.title || '').toLowerCase().includes(entity.toLowerCase())
+        const titleLower = title.toLowerCase();
+        const contentLower = content.toLowerCase();
+
+        const titleMatch = NAGORIK_DESK_FOLLOWED_ENTITIES.some(entity =>
+          titleLower.includes(entity.toLowerCase())
         );
+        const contentMatch = NAGORIK_DESK_FOLLOWED_ENTITIES.some(entity =>
+          contentLower.includes(entity.toLowerCase())
+        );
+        const isFollowedSource = titleMatch || contentMatch ||
+          (feed.title || '').toLowerCase().includes('amar desh') ||
+          (feed.title || '').toLowerCase().includes('ntv');
+
+        const priorityScore = (titleMatch ? 10 : 0) + (contentMatch ? 5 : 0);
 
         fresh.push({
           title,
@@ -185,7 +194,8 @@ async function fetchRssArticles() {
           content: content.slice(0, 2000),
           pubDate: pubDateStr,
           feedTitle: feed.title || url,
-          isFollowedSource
+          isFollowedSource,
+          priorityScore
         });
       }
     } catch (err) {
@@ -193,19 +203,15 @@ async function fetchRssArticles() {
     }
   }
 
-  // Strictly prioritize followed entity news from Nagorik Desk
-  const followedFresh = fresh.filter(f => f.isFollowedSource);
-  const eligibleFresh = followedFresh.length > 0 ? followedFresh : fresh;
+  // Sort by priorityScore (highest political relevance first), then newest first
+  fresh.sort((a, b) => b.priorityScore - a.priorityScore || new Date(b.pubDate) - new Date(a.pubDate));
 
-  // Sort newest first
-  eligibleFresh.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-
-  const followedCount = eligibleFresh.filter(f => f.isFollowedSource).length;
-  console.log(`[FETCHER] Found ${fresh.length} total fresh articles (${followedCount} strictly matching Nagorik Desk followed entities)`);
-  if (eligibleFresh.length > 0) {
-    console.log(`[FETCHER] Selected top article: "${eligibleFresh[0].title}" [Followed Match: ${eligibleFresh[0].isFollowedSource ? 'YES' : 'NO'}] (${eligibleFresh[0].pubDate})`);
+  const followedCount = fresh.filter(f => f.priorityScore > 0).length;
+  console.log(`[FETCHER] Found ${fresh.length} total fresh articles (${followedCount} with high political priority)`);
+  if (fresh.length > 0) {
+    console.log(`[FETCHER] Selected top article: "${fresh[0].title}" [Priority: ${fresh[0].priorityScore}] (${fresh[0].pubDate})`);
   }
-  return { fresh: eligibleFresh, processed };
+  return { fresh, processed };
 }
 
 function buildPrompt(article) {
@@ -455,6 +461,7 @@ async function runNewsCycle(trigger = 'cron') {
 
         if (result.decision === 'REJECT') {
           console.log(`[CYCLE] REJECTED - ${result.reason}`);
+          await new Promise(r => setTimeout(r, 1500));
           continue;
         }
 
