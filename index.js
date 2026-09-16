@@ -33,7 +33,7 @@ const GROQ_MODEL = process.env.GROQ_MODEL || cloudConfig.GROQ_MODEL || 'groq/com
 const PABBLY_WEBHOOK_URL = process.env.PABBLY_WEBHOOK_URL || cloudConfig.PABBLY_WEBHOOK_URL || '';
 const MAX_POSTS_PER_CYCLE = parseInt(process.env.MAX_POSTS_PER_CYCLE || cloudConfig.MAX_POSTS_PER_CYCLE || '1', 10);
 const GEMINI_MODEL = process.env.GEMINI_MODEL || cloudConfig.GEMINI_MODEL || 'gemini-1.5-flash';
-const CRON_SCHEDULE = process.env.CRON_SCHEDULE || cloudConfig.CRON_SCHEDULE || '0 */2 * * *';
+const CRON_SCHEDULE = process.env.CRON_SCHEDULE || cloudConfig.CRON_SCHEDULE || '0 * * * *';
 
 const DATA_DIR = path.join(__dirname, 'data');
 const PROCESSED_FILE = path.join(DATA_DIR, 'processed.json');
@@ -76,25 +76,50 @@ function saveProcessedUrls(set) {
   }
 }
 
+// Pre-filter keywords to strictly reject sports articles across all sources
+const SPORTS_KEYWORDS = [
+  'ক্রিকেট', 'cricket', 'ফুটবল', 'football', 'মেসি', 'রোনালদো', 'messi', 'ronaldo',
+  'সাকিব', 'তামিম', 'মুশফিক', 'মুস্তাফিজ', 'লিটন দাস', 'শান্ত', 'নাজমুল হোসেন শান্ত',
+  'বিপিএল', 'আইপিএল', 'bpl', 'ipl', 'ম্যাচ', 'খেলা', 'স্পোর্টস', 'sports',
+  'উইকেট', 'গোল', 'ম্যানচেস্টার', 'রিয়াল মাদ্রিদ', 'বার্সেলোনা', 'সেঞ্চুরি', 'অর্ধশতক',
+  'লা লিগা', 'চ্যাম্পিয়ন্স লিগ', 'টি-টোয়েন্টি', 't20', 'টেস্ট ম্যাচ', 'ব্যাটসম্যান',
+  'বোলার', 'বোলিং', 'ব্যাটিং', 'বিশ্বকাপ ফুটবল', 'বিশ্বকাপ ক্রিকেট', 'হাফ সেঞ্চুরি',
+  'টসে জিতে', 'ইনিংস', 'রান রেট', 'পিসিবির', 'বিসিবি', 'বিসিবির', 'আইসিসি'
+];
+
+function isSportsArticle(title = '', content = '') {
+  const combined = (title + ' ' + content).toLowerCase();
+  return SPORTS_KEYWORDS.some(kw => combined.includes(kw.toLowerCase()));
+}
+
 const NAGORIK_DESK_FOLLOWED_ENTITIES = [
-  // 10 Followed Entities & Key Figures from Nagorik Desk Page
+  // 1. Jamaat-e-Islami Leadership & Figures (Pro-Jamaat Positive Framing)
   'শফিকুর রহমান', 'Shafiqur Rahman', 'ডা. শফিকুর রহমান', 'আমীরে জামায়াত', 'আমিরে জামায়াত',
   'জামায়াতে ইসলামী', 'বাংলাদেশ জামায়াতে ইসলামী', 'Jamaat', 'Jamaat-e-Islami', 'জামায়াত',
   'ইসলামী ছাত্রশিবির', 'ছাত্রশিবির', 'Chhatra Shibir', 'শিবির',
-  'জাতীয় সংসদ', 'বাংলাদেশ জাতীয় সংসদ', 'জাতীয় সংসদ ভবন', 'সংসদ', 'Parliament',
+  'মিয়া গোলাম পরওয়ার', 'মকবুল আহমাদ', 'সৈয়দ আবদুল্লাহ মোহাম্মদ তাহের', 'তাহের',
+  // 2. National Citizen Committee (জাতীয় নাগরিক কমিটি / NCP) & Student Movement Coordinators
+  'জাতীয় নাগরিক কমিটি', 'জাতীয় নাগরিক পার্টি', 'NCP', 'National Citizen Committee', 'নাগরিক কমিটি',
+  'নাসিরুদ্দীন পাটওয়ারী', 'Nasiruddin Patwary', 'নাসিরউদ্দিন পাটোয়ারী',
+  'আখতার হোসেন', 'Akhtar Hossen', 'আখতার',
+  'হাসনাত আব্দুল্লাহ', 'Hasnat Abdullah', 'হাসনাত',
+  'সারজিস আলম', 'Sarjis Alam', 'সারজিস',
   'আসিফ মাহমুদ', 'Asif Mahmud', 'Asif Mahmud Shojib Bhuyain', 'সজীব ভূঁইয়া',
   'নাহিদ ইসলাম', 'Nahid Islam',
-  'নাসিরুদ্দীন পাটওয়ারী', 'Nasiruddin Patwary', 'নাসিরউদ্দিন পাটোয়ারী',
-  'হাসনাত আব্দুল্লাহ', 'Hasnat Abdullah', 'সারজিস আলম', 'Sarjis Alam',
-  // News Media Outlets
+  'বৈষম্যবিরোধী ছাত্র আন্দোলন', 'সমন্বয়ক', 'আব্দুল হান্নান মাসউদ', 'উমামা ফাতেমা', 'আরিফ সোহেল',
+  // 3. National Governance, Parliament, Constitution & State Reform
+  'প্রধান উপদেষ্টা', 'ড. ইউনূস', 'মুহাম্মদ ইউনূস', 'Muhammad Yunus', 'উপদেষ্টা পরিষদ',
+  'জাতীয় সংসদ', 'বাংলাদেশ জাতীয় সংসদ', 'জাতীয় সংসদ ভবন', 'সংসদ', 'Parliament',
+  'সংস্কার কমিশন', 'রাষ্ট্র সংস্কার', 'সংবিধান সংস্কার', 'নির্বাচন কমিশন', 'নির্বাচনী রোডম্যাপ',
+  'বিচার বিভাগ', 'সুপ্রিম কোর্ট', 'হাইকোর্ট', 'দুদক', 'বাংলাদেশ ব্যাংক',
+  // 4. Partner & Independent Media Outlets
   'এনটিভি', 'NTV', 'ntvdigital', 'ntvbd',
   'যমুনা টেলিভিশন', 'যমুনা টিভি', 'Jamuna Television', 'Jamuna TV',
-  'চ্যানেল ওয়ান', 'Channel One', 'channelonenewslive',
+  'চ্যানেল ওয়ান', 'Channel One',
   'আমার দেশ', 'Amar Desh', 'dailyamardesh', 'মাহমুদুর রহমান', 'Mahmudur Rahman',
-  'প্রধান উপদেষ্টা', 'ড. ইউনূস', 'মুহাম্মদ ইউনূস', 'Muhammad Yunus', 'উপদেষ্টা পরিষদ',
-  // Political monitoring keywords (critical watchdog on BNP & national reform)
+  // 5. Critical Watchdog Targets (BNP / Awami League Misrule, Extortion & Syndicates)
   'বিএনপি', 'BNP', 'তারেক রহমান', 'Tarique Rahman', 'মির্জা ফখরুল', 'Mirza Fakhrul',
-  'চাঁদাবাজি', 'দখলদারিত্ব', 'সংস্কার', 'রাষ্ট্র সংস্কার', 'নির্বাচনী রোডম্যাপ', 'নির্বাচন কমিশন'
+  'আওয়ামী লীগ', 'Awami League', 'চাঁদাবাজি', 'দখলদারিত্ব', 'সিন্ডিকেট', 'অর্থপাচার', 'দুর্নীতি'
 ];
 
 function extractItemTitle(item) {
@@ -158,7 +183,13 @@ async function fetchRssArticles() {
         const pubDateStr = item.pubDate || item.isoDate || new Date().toISOString();
         if (!title) continue;
 
-        // Check cross-source duplicate stories from recent memory
+        // 1. Strictly filter out sports news before anything else
+        if (isSportsArticle(title, content)) {
+          console.log(`[FETCHER] Skipping sports article: "${title.slice(0, 50)}..."`);
+          continue;
+        }
+
+        // 2. Check cross-source duplicate stories from recent memory
         const dupCheck = checkDuplicateStory({ title, link }, recentStories);
         if (dupCheck.isDuplicate) {
           console.log(`[FETCHER] Skipping duplicate story: "${title.slice(0, 50)}..." (${dupCheck.reason})`);
@@ -185,7 +216,8 @@ async function fetchRssArticles() {
           (feed.title || '').toLowerCase().includes('amar desh') ||
           (feed.title || '').toLowerCase().includes('ntv');
 
-        const priorityScore = (titleMatch ? 10 : 0) + (contentMatch ? 5 : 0);
+        // Priority scoring: Political/Jamaat/NCP items get top priority, all other non-sports news get base priority (+2)
+        const priorityScore = (titleMatch ? 10 : 0) + (contentMatch ? 5 : 0) + (isFollowedSource ? 3 : 0) + 2;
 
         fresh.push({
           title,
@@ -203,11 +235,11 @@ async function fetchRssArticles() {
     }
   }
 
-  // Sort by priorityScore (highest political relevance first), then newest first
+  // Sort by priorityScore (highest political/editorial relevance first), then newest first
   fresh.sort((a, b) => b.priorityScore - a.priorityScore || new Date(b.pubDate) - new Date(a.pubDate));
 
-  const followedCount = fresh.filter(f => f.priorityScore > 0).length;
-  console.log(`[FETCHER] Found ${fresh.length} total fresh articles (${followedCount} with high political priority)`);
+  const highPriorityCount = fresh.filter(f => f.priorityScore > 2).length;
+  console.log(`[FETCHER] Found ${fresh.length} total fresh articles (${highPriorityCount} with high political priority)`);
   if (fresh.length > 0) {
     console.log(`[FETCHER] Selected top article: "${fresh[0].title}" [Priority: ${fresh[0].priorityScore}] (${fresh[0].pubDate})`);
   }
@@ -215,22 +247,18 @@ async function fetchRssArticles() {
 }
 
 function buildPrompt(article) {
-  return `You are a strategic political analyst, viral social media strategist, and senior editor for 'NAGORIK DESK' (নাগরিক ডেস্ক), focusing on Bangladeshi national politics and political developments.
+  return `You are the Chief Editor and Senior Political Strategist for 'NAGORIK DESK' (নাগরিক ডেস্ক), a premier digital news media house covering Bangladesh.
 
-EDITORIAL POLICY & STANCE:
-1. FOCUS: High-impact Bangladeshi political news, governance, national reforms, and political party actions (especially involving the entities followed by Nagorik Desk: Dr. Shafiqur Rahman / Jamaat-e-Islami, interim advisers Asif Mahmud / Nahid Islam / Nasiruddin Patwary, coordinators Hasnat Abdullah, national media outlets like Jamuna TV / NTV, and Parliament).
-2. JAMAAT-E-ISLAMI PERSPECTIVE (PRO-JAMAAT):
-   - Highlight Dr. Shafiqur Rahman and Bangladesh Jamaat-e-Islami's disciplined leadership, constructive nation-building stance, anti-corruption drive, social welfare initiatives, and principled support for democratic state reforms.
-   - Present their statements and public gatherings with positive, dignified framing.
-3. CRITICAL WATCHDOG ON BNP (BNP-CRITICAL):
-   - Scrutinize and critically expose BNP's factional infighting, extortion/occupation (দখলদারিত্ব ও চাঁদাবাজি), impatience for power, controversies, double standards, or resistance to essential state reforms.
-   - Contrast destructive or opportunistic political conduct with the need for ethical, transparent politics.
-4. INTERIM GOVERNMENT & COORDINATORS:
-   - Constructive reporting on Chief Adviser Dr. Muhammad Yunus, key advisers (Asif Mahmud, Nahid Islam), and student coordinators.
-5. REJECT NON-POLITICAL OR TRIVIAL NEWS:
-   - Routine entertainment, minor crime, sports gossip, or irrelevant foreign fillers must be REJECTED. Focus strictly on political significance and national interest.
+EDITORIAL IDENTITY & CHARTER:
+1. COVERAGE SCOPE: Full media house coverage across ALL domains (National, Politics, Economy & Business, Judiciary & Law, Governance/Administration, Campus & Youth Movement, Crime/Investigation, Geopolitics/International Affairs, Environment & Society).
+   - STRICT EXCLUSION: Sports (cricket, football, BPL, IPL, player transfers, match reports) and trivial celebrity gossip are STRICTLY PROHIBITED.
+2. EDITORIAL PERSPECTIVE & BIAS:
+   - PRO-JAMAAT PERSPECTIVE: Report on Dr. Shafiqur Rahman and Bangladesh Jamaat-e-Islami with dignity and affirmative framing — highlighting their organizational discipline, nationwide humanitarian and social welfare initiatives, uncompromising anti-corruption stance, defense of Islamic values, and constructive partnership in democratic state reforms.
+   - PRO-NCP & YOUTH MOVEMENT (জাতীয় নাগরিক কমিটি - NCP & বৈষম্যবিরোধী ছাত্র আন্দোলন): Strongly amplify the revolutionary goals of July-August, state reform demands, and democratic youth leadership led by Nasiruddin Patwary, Akhtar Hossen, Asif Mahmud, Nahid Islam, Hasnat Abdullah, Sarjis Alam, and the National Citizen Committee (NCP).
+   - CRITICAL WATCHDOG ON BNP & AWAMI LEAGUE MISRULE: Fearlessly investigate and critically report on BNP and Awami League factional conflicts, extortion (চাঁদাবাজি), land grabbing (দখলদারিত্ব), market syndicates, lust for power, and resistance to vital state reforms.
+   - GENERAL NEWS (Economy, Judiciary, Administration, Geopolitics, Society): Deliver authoritative, fact-dense, public-first journalistic reporting with maximum clarity and credibility.
 
-ARTICLE:
+ARTICLE DATA:
 Title: ${article.title}
 Source: ${article.feedTitle}
 Link: ${article.link}
@@ -238,42 +266,46 @@ Snippet: ${article.content || article.title}
 Date: ${article.pubDate}
 
 EVALUATION CRITERIA (score 1-10 each):
-1. Political Impact & Relevance - Does it impact Bangladesh politics, governance, Jamaat, BNP, or national reform?
-2. Factual Clarity - Is the news credible, specific, and clear?
-3. Viral Discussion Potential - Will it provoke comments, engagement, and public debate?
+1. Public & National Relevance - Does this news matter to citizens, governance, economy, politics, or society? (Sports = 0).
+2. Factual Integrity & Clarity - Is the information clear, specific, and credible?
+3. Citizen Engagement Value - Will it inform the public and generate meaningful discussion?
 
-DECISION RULE: PASS only if all 3 scores >= 6 AND average >= 7. Otherwise REJECT.
+DECISION RULE:
+- PASS if the article is non-sports, factual, and informative (all scores >= 5 and average >= 6).
+- REJECT only if it is sports, trivial gossip, duplicate filler, or unverified rumor.
 
-VIRAL WRITING FORMAT (IF PASS):
-- LANGUAGE: Punchy, authoritative, highly engaging standard Bengali.
-- HOOK (DIVERSE & CONTEXTUAL): DO NOT ALWAYS USE 'ব্রেকিং নিউজ'. Dynamically select an appropriate high-voltage hook:
-  * ⚡ বিশেষ প্রতিবেদন | (for governance, constitutional, or parliamentary analysis)
-  * 🔥 রাজনৈতিক তোলপাড় | (for major political developments, sharp controversies, or clashes)
-  * 📢 বড় তথ্য সামনে এলো | or 📢 জরুরি বার্তা | (for major public disclosures, official statements, or policy shifts)
-  * ⚠️ দৃষ্টি আকর্ষণ | or ⚠️ বড় খবর | (for crucial updates, legal scrutiny, or cautionary developments)
-  * 📌 পর্দার আড়ালের খবর | (for insider party politics or backstage strategic moves)
-  * 🎙️ সরাসরি বক্তব্য | (when reporting a speech, press conference, or direct address)
-  * 🗳️ সংস্কার ও নির্বাচন | (for election commission, electoral reforms, or political roadmap)
-  * Or a dramatic direct quote hook: ❝বক্তব্যের মূল অংশ...❞
-  * Reserve 🚨 ব্রেকিং নিউজ | ONLY for fast-breaking immediate crises.
-- BODY: 2-3 short, scannable, high-impact paragraphs highlighting key facts, political implications, and public interest. Maintain the editorial stance naturally and factually.
-- SOURCE & SPEAKER ATTRIBUTION RULES:
-  1. POLITICAL PERSON / LEADER NEWS: If the story features or quotes a political leader or coordinator (e.g. Dr. Shafiqur Rahman, Asif Mahmud, Nahid Islam, Hasnat Abdullah, Jamaat or BNP figures):
-     - Prominently mention the speaker: "🎙️ বক্তব্য: [বক্তার নাম ও পদবি]" or "🎙️ সূত্র: [বক্তার বক্তব্য]".
-  2. NEWS MEDIA PORTAL NEWS: If reporting from an online news media portal (e.g. Prothom Alo, BBC Bangla, NTV, Channel i, Daily Star):
-     - Conclude with clear, credible source attribution and the direct link:
-       "📌 তথ্যসূত্র: ${article.feedTitle || 'অনলাইন ডেস্ক'}
-🔗 মূল সংবাদের বিস্তারিত: ${article.link}"
-  3. NEVER SAY "সংবাদের মূল লিংক প্রথম কমেন্টে দেখুন" (do not promise comments that are not automatically posted).
-- ENGAGEMENT QUESTION (Call to Action): 1 provocative sentence inviting readers to share their opinion (e.g. "👇 এ বিষয়ে আপনার মতামত কী? কমেন্টে জানান!").
-- HASHTAGS: 4-5 high-volume trending hashtags at end (e.g. #NagorikDesk #BangladeshPolitics #Jamaat #BNP #Trending).
+WRITING GUIDELINES (IF PASS):
+- TONE: Authoritative, polished, engaging standard Bengali journalism.
+- DYNAMIC HOOK (Choose the single most fitting context-driven hook):
+  * ⚡ বিশেষ প্রতিবেদন | (for in-depth governance, constitutional reform, or policy moves)
+  * 🚨 ব্রেকিং নিউজ | (for urgent breaking crises or immediate major announcements)
+  * 🔥 রাজনৈতিক অঙ্গন | (for sharp political developments, elections, or party moves)
+  * 📢 বিশেষ বার্তা | or 📢 বড় ঘোষণা | (for official statements, press conferences, or directives)
+  * 💰 অর্থনীতি ও বাণিজ্য | (for inflation, banks, currency, budget, or trade)
+  * ⚖️ আদালত ও আইন | (for Supreme Court rulings, trial updates, corruption cases)
+  * ⚠️ দৃষ্টি আকর্ষণ | or ⚠️ বিশেষ সতর্কতা | (for public alerts, weather/disaster, security)
+  * 📌 পর্দার আড়ালের খবর | (for insider party politics, alliances, or investigative insights)
+  * 🎙️ সরাসরি বক্তব্য | (when quoting a prominent leader's direct speech)
+  * 🌍 বিশ্ব সংবাদ | (for major geopolitical, regional, or diaspora developments)
+- STRUCTURE:
+  * Dynamic Hook & Headline at the top.
+  * 2 to 3 concise, highly readable paragraphs explaining: What happened, context/speakers, and why it matters to the public.
+  * Use clear bullet points with emoji (e.g. 🔹, 🔸, 📌) if detailing key aspects or timeline.
+- SOURCE & ATTRIBUTION (MANDATORY):
+  📌 তথ্যসূত্র: ${article.feedTitle || 'অনলাইন ডেস্ক'}
+  🔗 মূল সংবাদের বিস্তারিত: ${article.link}
+  (CRITICAL: NEVER write 'কমেন্টে লিংক দেওয়া আছে' - always include the direct link right in the post text).
+- CALL TO ACTION (CTA):
+  👇 এ বিষয়ে আপনার কী মতামত? কমেন্টে জানান!
+- HASHTAGS:
+  #NagorikDesk #BangladeshNews #NationalNews #Trending
 
-OUTPUT STRICT JSON ONLY (no markdown, no extra text):
+OUTPUT STRICT JSON ONLY (no markdown fences, no extra text):
 {
   "decision": "PASS" or "REJECT",
-  "scores": { "politicalImpact": 0, "factualClarity": 0, "viralPotential": 0 },
+  "scores": { "relevance": 0, "factualClarity": 0, "engagement": 0 },
   "reason": "1 sentence reason",
-  "rewrittenPost": "full post text in Bengali with speaker/source attribution and direct link",
+  "rewrittenPost": "full post text in Bengali with source attribution and direct link",
   "commentLink": "🔗 মূল সংবাদের লিংক: ${article.link}"
 }`;
 }
@@ -314,29 +346,38 @@ async function evaluateWithGemini(article) {
 }
 
 async function evaluateWithGroq(article) {
-  try {
-    console.log(`[BRAIN][GROQ] Evaluating: "${article.title.slice(0, 80)}..."`);
-    const prompt = buildPrompt(article);
-    const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
-      model: GROQ_MODEL,
-      messages: [
-        { role: 'system', content: 'You are a political news analyst and senior editor for NAGORIK DESK. Output strict JSON only.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 1500
-    }, {
-      headers: { Authorization: `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
-      timeout: 30000
-    });
-    const text = res.data.choices[0].message.content;
-    const parsed = extractJson(text);
-    console.log(`[BRAIN][GROQ] Decision: ${parsed.decision} | Scores: ${JSON.stringify(parsed.scores)}`);
-    return parsed;
-  } catch (err) {
-    console.error(`[BRAIN][GROQ] Error: ${err.response?.data ? JSON.stringify(err.response.data) : err.message}`);
-    throw err;
+  const candidateModels = [GROQ_MODEL, 'openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'groq/compound-mini'];
+  const uniqueModels = [...new Set(candidateModels.filter(Boolean))];
+  const prompt = buildPrompt(article);
+
+  let lastError = null;
+  for (const model of uniqueModels) {
+    try {
+      console.log(`[BRAIN][GROQ] Evaluating with ${model}: "${article.title.slice(0, 70)}..."`);
+      const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
+        model: model,
+        messages: [
+          { role: 'system', content: 'You are the Chief Editor for NAGORIK DESK. Output strict JSON only.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.6,
+        max_tokens: 1500
+      }, {
+        headers: { Authorization: `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+        timeout: 30000
+      });
+      const text = res.data.choices[0].message.content;
+      const parsed = extractJson(text);
+      console.log(`[BRAIN][GROQ] Model: ${model} | Decision: ${parsed.decision} | Scores: ${JSON.stringify(parsed.scores)}`);
+      return parsed;
+    } catch (err) {
+      lastError = err;
+      const errMsg = err.response?.data?.error?.message || err.message;
+      console.warn(`[BRAIN][GROQ] Model ${model} failed (${errMsg}), trying next candidate...`);
+      await new Promise(r => setTimeout(r, 1200));
+    }
   }
+  throw lastError || new Error('All Groq model attempts failed');
 }
 
 const DEFAULT_BRAND_PHOTO = 'https://raw.githubusercontent.com/madrasa-2026/daily-news-harness/master/assets/nagorik_desk_brand.jpg';
@@ -539,12 +580,13 @@ app.get('/', (req, res) => {
     <body>
       <div class="card">
         <h1>📰 NAGORIK DESK Publisher</h1>
-        <p>Automated Viral News Engine | 9 Posts/Day (7 AM - 11 PM BST) + HD News Cards + Anti-Duplication</p>
+        <p>Full Professional Digital News Media House | 10–15 Posts/Day (24/7 Cloud) | Pure Text Journalism</p>
         <div>
-          <span class="badge">Status: Live</span>
+          <span class="badge">Status: Live 24/7</span>
           <span class="badge">Page: Nagorik Desk</span>
-          <span class="badge">Schedule: 9x Daily (07:00-23:00 BST)</span>
-          <span class="badge">Visuals: HD News Cards</span>
+          <span class="badge">Scope: All News (No Sports)</span>
+          <span class="badge">Format: Pure Text</span>
+          <span class="badge">Pabbly: Connected</span>
         </div>
         <br/>
         <button class="btn" onclick="triggerPost()">🚀 Post Now On-Demand (Exception Slot)</button>
@@ -560,7 +602,7 @@ app.get('/', (req, res) => {
           el.style.display = 'block';
           el.style.color = '#38bdf8';
           el.style.background = '#1e3a8a';
-          el.innerText = '⌛ Triggering viral news cycle... fetching, generating news card & publishing...';
+          el.innerText = '⌛ Triggering professional news cycle... fetching, evaluating & publishing...';
           try {
             const res = await fetch('/trigger');
             const data = await res.json();

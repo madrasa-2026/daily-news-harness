@@ -6,5 +6,5 @@
   "MAX_POSTS_PER_CYCLE": 1,
   "HOLD_POSTING": "false",
   "PURE_TEXT_ONLY": "true",
-  "CRON_SCHEDULE": "0 */2 * * *"
+  "CRON_SCHEDULE": "0 * * * *"
 }
