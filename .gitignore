@@ -1,6 +1,5 @@
 node_modules/
 .env
-data/processed.json
 npm-debug.log
 .DS_Store
 scratch*.js
@@ -8,5 +7,4 @@ scratch*.js
 *.png
 public/cards/*
 !public/cards/.gitkeep
-data/recent_stories.json
 
