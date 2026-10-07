@@ -6,13 +6,24 @@ const Parser = require('rss-parser');
 const axios = require('axios');
 const fs = require('fs');
 const { normalizeUrl, loadRecentStories, saveRecentStories, checkDuplicateStory } = require('./utils/dedup');
+const { saveArticle, getArticles, getArticleBySlugOrId, getArticlesByCategory, incrementViews, loadArticles } = require('./utils/storage');
+const { generateCardSvg } = require('./utils/card_generator');
+const { renderHome } = require('./portal/templates/home');
+const { renderArticle } = require('./portal/templates/article');
+const { renderCategory } = require('./portal/templates/category');
 
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Serve static assets
+app.use(express.static(path.join(__dirname, 'portal', 'public')));
+app.use('/cards', express.static(path.join(__dirname, 'public', 'cards')));
+app.use('/images', express.static(path.join(__dirname, 'portal', 'public', 'images')));
 
 const PORT = process.env.PORT || 10000;
 
-// Load secure cloud configuration fallback from private repository
+// Load secure cloud configuration fallback
 const cloudConfigFile = path.join(__dirname, 'config.production.json');
 let cloudConfig = {};
 if (fs.existsSync(cloudConfigFile)) {
@@ -29,8 +40,8 @@ const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || cloudConfig.RSS_FEED_URLS ||
   .filter(Boolean);
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || cloudConfig.GEMINI_API_KEY || '';
 const GROQ_API_KEY = process.env.GROQ_API_KEY || cloudConfig.GROQ_API_KEY || '';
-const GROQ_MODEL = process.env.GROQ_MODEL || cloudConfig.GROQ_MODEL || 'groq/compound-mini';
-const PABBLY_WEBHOOK_URL = process.env.PABBLY_WEBHOOK_URL || cloudConfig.PABBLY_WEBHOOK_URL || '';
+const GROQ_MODEL = process.env.GROQ_MODEL || cloudConfig.GROQ_MODEL || 'openai/gpt-oss-120b';
+const PABBLY_WEBHOOK_URL = process.env.PABBLY_WEBHOOK_URL || process.env.MAKE_WEBHOOK_URL || cloudConfig.PABBLY_WEBHOOK_URL || '';
 const MAX_POSTS_PER_CYCLE = parseInt(process.env.MAX_POSTS_PER_CYCLE || cloudConfig.MAX_POSTS_PER_CYCLE || '1', 10);
 const GEMINI_MODEL = process.env.GEMINI_MODEL || cloudConfig.GEMINI_MODEL || 'gemini-1.5-flash';
 const CRON_SCHEDULE = process.env.CRON_SCHEDULE || cloudConfig.CRON_SCHEDULE || '0 * * * *';
@@ -41,7 +52,7 @@ const RECENT_STORIES_FILE = path.join(DATA_DIR, 'recent_stories.json');
 
 const parser = new Parser({
   timeout: 8000,
-  headers: { 'User-Agent': 'DailyNewsHarness/1.0 (+https://render.com)' }
+  headers: { 'User-Agent': 'JonobartaNewsEngine/2.0 (+https://daily-news-harness.onrender.com)' }
 });
 
 if (!fs.existsSync(DATA_DIR)) {
@@ -92,7 +103,7 @@ function isSportsArticle(title = '', content = '') {
   return SPORTS_KEYWORDS.some(kw => combined.includes(kw.toLowerCase()));
 }
 
-const NAGORIK_DESK_FOLLOWED_ENTITIES = [
+const JONOBARTA_FOLLOWED_ENTITIES = [
   // 1. Jamaat-e-Islami Leadership & Figures (Pro-Jamaat Positive Framing)
   'শফিকুর রহমান', 'Shafiqur Rahman', 'ডা. শফিকুর রহমান', 'আমীরে জামায়াত', 'আমিরে জামায়াত',
   'জামায়াতে ইসলামী', 'বাংলাদেশ জামায়াতে ইসলামী', 'Jamaat', 'Jamaat-e-Islami', 'জামায়াত',
@@ -130,14 +141,6 @@ function extractItemTitle(item) {
   if (item.title?._) return String(item.title._).trim();
   if (item.title?.value) return String(item.title.value).trim();
   if (item.title?.['$']) return String(item.title['$']).trim();
-  if (typeof item.title === 'object') {
-    for (const val of Object.values(item.title)) {
-      if (typeof val === 'string' && val.trim()) return val.trim();
-      if (val && typeof val === 'object' && val._) return String(val._).trim();
-      if (Array.isArray(val) && val[0]?._) return String(val[0]._).trim();
-      if (Array.isArray(val) && typeof val[0] === 'string') return String(val[0]).trim();
-    }
-  }
   return String(item.title).trim();
 }
 
@@ -149,12 +152,6 @@ function extractItemLink(item) {
   if (raw?.['$']?.href) return String(raw['$'].href).trim();
   if (raw?.href) return String(raw.href).trim();
   if (raw?._) return String(raw._).trim();
-  if (typeof raw === 'object') {
-    for (const val of Object.values(raw)) {
-      if (typeof val === 'string' && val.startsWith('http')) return val.trim();
-      if (val?.href) return String(val.href).trim();
-    }
-  }
   return String(raw).trim();
 }
 
@@ -183,13 +180,12 @@ async function fetchRssArticles() {
         const pubDateStr = item.pubDate || item.isoDate || new Date().toISOString();
         if (!title) continue;
 
-        // 1. Strictly filter out sports news before anything else
+        // 1. Filter out sports news
         if (isSportsArticle(title, content)) {
-          console.log(`[FETCHER] Skipping sports article: "${title.slice(0, 50)}..."`);
           continue;
         }
 
-        // 2. Check cross-source duplicate stories from recent memory
+        // 2. Check cross-source duplicates
         const dupCheck = checkDuplicateStory({ title, link }, recentStories);
         if (dupCheck.isDuplicate) {
           console.log(`[FETCHER] Skipping duplicate story: "${title.slice(0, 50)}..." (${dupCheck.reason})`);
@@ -198,25 +194,22 @@ async function fetchRssArticles() {
 
         const pubDateMs = Date.parse(pubDateStr);
         if (!isNaN(pubDateMs) && (now - pubDateMs) > MAX_AGE_MS) {
-          const hoursOld = Math.round((now - pubDateMs) / (1000 * 60 * 60));
-          console.log(`[FETCHER] Skipping stale news (${hoursOld}h old): "${title.slice(0, 50)}..."`);
           continue;
         }
 
         const titleLower = title.toLowerCase();
         const contentLower = content.toLowerCase();
 
-        const titleMatch = NAGORIK_DESK_FOLLOWED_ENTITIES.some(entity =>
+        const titleMatch = JONOBARTA_FOLLOWED_ENTITIES.some(entity =>
           titleLower.includes(entity.toLowerCase())
         );
-        const contentMatch = NAGORIK_DESK_FOLLOWED_ENTITIES.some(entity =>
+        const contentMatch = JONOBARTA_FOLLOWED_ENTITIES.some(entity =>
           contentLower.includes(entity.toLowerCase())
         );
         const isFollowedSource = titleMatch || contentMatch ||
           (feed.title || '').toLowerCase().includes('amar desh') ||
           (feed.title || '').toLowerCase().includes('ntv');
 
-        // Priority scoring: Political/Jamaat/NCP items get top priority, all other non-sports news get base priority (+2)
         const priorityScore = (titleMatch ? 10 : 0) + (contentMatch ? 5 : 0) + (isFollowedSource ? 3 : 0) + 2;
 
         fresh.push({
@@ -235,7 +228,7 @@ async function fetchRssArticles() {
     }
   }
 
-  // Sort by priorityScore (highest political/editorial relevance first), then newest first
+  // Sort by priorityScore, then newest first
   fresh.sort((a, b) => b.priorityScore - a.priorityScore || new Date(b.pubDate) - new Date(a.pubDate));
 
   const highPriorityCount = fresh.filter(f => f.priorityScore > 2).length;
@@ -247,16 +240,16 @@ async function fetchRssArticles() {
 }
 
 function buildPrompt(article) {
-  return `You are the Chief Editor and Senior Political Strategist for 'NAGORIK DESK' (নাগরিক ডেস্ক), a premier digital news media house covering Bangladesh.
+  return `You are the Senior Executive Editor for 'জনবার্তা' (Jonobarta - jonobarta.com), a leading digital news media house covering Bangladesh.
 
-EDITORIAL IDENTITY & CHARTER:
+EDITORIAL CHARTER & STANCE:
 1. COVERAGE SCOPE: Full media house coverage across ALL domains (National, Politics, Economy & Business, Judiciary & Law, Governance/Administration, Campus & Youth Movement, Crime/Investigation, Geopolitics/International Affairs, Environment & Society).
-   - STRICT EXCLUSION: Sports (cricket, football, BPL, IPL, player transfers, match reports) and trivial celebrity gossip are STRICTLY PROHIBITED.
+   - STRICT EXCLUSION: Sports and trivial celebrity gossip are STRICTLY PROHIBITED.
 2. EDITORIAL PERSPECTIVE & BIAS:
-   - PRO-JAMAAT PERSPECTIVE: Report on Dr. Shafiqur Rahman and Bangladesh Jamaat-e-Islami with dignity and affirmative framing — highlighting their organizational discipline, nationwide humanitarian and social welfare initiatives, uncompromising anti-corruption stance, defense of Islamic values, and constructive partnership in democratic state reforms.
-   - PRO-NCP & YOUTH MOVEMENT (জাতীয় নাগরিক কমিটি - NCP & বৈষম্যবিরোধী ছাত্র আন্দোলন): Strongly amplify the revolutionary goals of July-August, state reform demands, and democratic youth leadership led by Nasiruddin Patwary, Akhtar Hossen, Asif Mahmud, Nahid Islam, Hasnat Abdullah, Sarjis Alam, and the National Citizen Committee (NCP).
-   - CRITICAL WATCHDOG ON BNP & AWAMI LEAGUE MISRULE: Fearlessly investigate and critically report on BNP and Awami League factional conflicts, extortion (চাঁদাবাজি), land grabbing (দখলদারিত্ব), market syndicates, lust for power, and resistance to vital state reforms.
-   - GENERAL NEWS (Economy, Judiciary, Administration, Geopolitics, Society): Deliver authoritative, fact-dense, public-first journalistic reporting with maximum clarity and credibility.
+   - PRO-JAMAAT PERSPECTIVE: Report on Dr. Shafiqur Rahman and Bangladesh Jamaat-e-Islami with dignity and affirmative framing — highlighting organizational discipline, nationwide humanitarian relief, anti-corruption stance, and democratic state reforms.
+   - PRO-NCP & YOUTH MOVEMENT (জাতীয় নাগরিক কমিটি - NCP & বৈষম্যবিরোধী ছাত্র আন্দোলন): Champion revolutionary reform demands, public accountability, and youth leadership led by Nasiruddin Patwary, Akhtar Hossen, Asif Mahmud, Nahid Islam, Hasnat Abdullah, Sarjis Alam, and NCP.
+   - CRITICAL WATCHDOG ON BNP & AWAMI LEAGUE MISRULE: Critically report on factional conflicts, extortion (চাঁদাবাজি), land grabbing (দখলদারিত্ব), syndicates, and power politics.
+   - GENERAL NEWS (Economy, Judiciary, Administration, Geopolitics, Society): Deliver authoritative, fact-dense, public-first journalistic reporting.
 
 ARTICLE DATA:
 Title: ${article.title}
@@ -266,7 +259,7 @@ Snippet: ${article.content || article.title}
 Date: ${article.pubDate}
 
 EVALUATION CRITERIA (score 1-10 each):
-1. Public & National Relevance - Does this news matter to citizens, governance, economy, politics, or society? (Sports = 0).
+1. Public & National Relevance - Does this news matter to citizens, governance, economy, or society? (Sports = 0).
 2. Factual Integrity & Clarity - Is the information clear, specific, and credible?
 3. Citizen Engagement Value - Will it inform the public and generate meaningful discussion?
 
@@ -275,38 +268,31 @@ DECISION RULE:
 - REJECT only if it is sports, trivial gossip, duplicate filler, or unverified rumor.
 
 WRITING GUIDELINES (IF PASS):
-- TONE: Authoritative, polished, engaging standard Bengali journalism.
-- DYNAMIC HOOK (Choose the single most fitting context-driven hook):
-  * ⚡ বিশেষ প্রতিবেদন | (for in-depth governance, constitutional reform, or policy moves)
-  * 🚨 ব্রেকিং নিউজ | (for urgent breaking crises or immediate major announcements)
-  * 🔥 রাজনৈতিক অঙ্গন | (for sharp political developments, elections, or party moves)
-  * 📢 বিশেষ বার্তা | or 📢 বড় ঘোষণা | (for official statements, press conferences, or directives)
-  * 💰 অর্থনীতি ও বাণিজ্য | (for inflation, banks, currency, budget, or trade)
-  * ⚖️ আদালত ও আইন | (for Supreme Court rulings, trial updates, corruption cases)
-  * ⚠️ দৃষ্টি আকর্ষণ | or ⚠️ বিশেষ সতর্কতা | (for public alerts, weather/disaster, security)
-  * 📌 পর্দার আড়ালের খবর | (for insider party politics, alliances, or investigative insights)
-  * 🎙️ সরাসরি বক্তব্য | (when quoting a prominent leader's direct speech)
-  * 🌍 বিশ্ব সংবাদ | (for major geopolitical, regional, or diaspora developments)
-- STRUCTURE:
-  * Dynamic Hook & Headline at the top.
-  * 2 to 3 concise, highly readable paragraphs explaining: What happened, context/speakers, and why it matters to the public.
-  * Use clear bullet points with emoji (e.g. 🔹, 🔸, 📌) if detailing key aspects or timeline.
-- SOURCE & ATTRIBUTION (MANDATORY):
-  📌 তথ্যসূত্র: ${article.feedTitle || 'অনলাইন ডেস্ক'}
-  🔗 মূল সংবাদের বিস্তারিত: ${article.link}
-  (CRITICAL: NEVER write 'কমেন্টে লিংক দেওয়া আছে' - always include the direct link right in the post text).
-- CALL TO ACTION (CTA):
-  👇 এ বিষয়ে আপনার কী মতামত? কমেন্টে জানান!
-- HASHTAGS:
-  #NagorikDesk #BangladeshNews #NationalNews #Trending
+- Write an authoritative, professional news portal article in standard Bengali.
+- Output a clean, structured JSON with full article details:
+  * "title": Punchy, formal Bengali headline (max 15 words)
+  * "category": Choose one of ["জাতীয়", "রাজনীতি", "অর্থনীতি", "আইন ও আদালত", "সংস্কার ও রাষ্ট্র", "ক্যাম্পাস ও তরুণ", "আন্তর্জাতিক"]
+  * "summary": 1-2 sentence executive summary
+  * "paragraphs": Array of 2-3 well-written, informative paragraphs for the website article
+  * "speakerQuote": Key quote from speaker or authority (if any)
+  * "rewrittenPost": Viral social post text for Facebook with dynamic hook (⚡ বিশেষ প্রতিবেদন | or 🚨 ব্রেকিং নিউজ | or 📢 বড় খবর |), summary bullets, source attribution, and hashtags (#Jonobarta #BangladeshNews #Trending).
+  * "tags": 3-5 relevant Bengali tags
 
 OUTPUT STRICT JSON ONLY (no markdown fences, no extra text):
 {
   "decision": "PASS" or "REJECT",
   "scores": { "relevance": 0, "factualClarity": 0, "engagement": 0 },
   "reason": "1 sentence reason",
-  "rewrittenPost": "full post text in Bengali with source attribution and direct link",
-  "commentLink": "🔗 মূল সংবাদের লিংক: ${article.link}"
+  "title": "Bengali headline",
+  "category": "জাতীয়",
+  "summary": "1-2 sentence summary",
+  "paragraphs": [
+    "Paragraph 1 text...",
+    "Paragraph 2 text..."
+  ],
+  "speakerQuote": "Speaker quote if any",
+  "rewrittenPost": "full viral Facebook post text in Bengali",
+  "tags": ["জনবার্তা", "বাংলাদেশ", "সংবাদ"]
 }`;
 }
 
@@ -319,28 +305,19 @@ function extractJson(rawText) {
 
 async function evaluateWithGemini(article) {
   if (!GEMINI_API_KEY) {
-    console.log('[BRAIN] No GEMINI_API_KEY set, trying Groq fallback...');
     if (GROQ_API_KEY) return evaluateWithGroq(article);
-    throw new Error('No LLM API key configured (set GEMINI_API_KEY or GROQ_API_KEY)');
+    throw new Error('No LLM API key configured');
   }
   try {
-    console.log(`[BRAIN][GEMINI] Evaluating: "${article.title.slice(0, 80)}..."`);
     const { GoogleGenerativeAI } = require('@google/generative-ai');
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
     const prompt = buildPrompt(article);
     const result = await model.generateContent(prompt);
     const text = result.response.text().trim();
-    console.log(`[BRAIN][GEMINI] Raw response: ${text.slice(0, 300)}...`);
-    const parsed = extractJson(text);
-    console.log(`[BRAIN][GEMINI] Decision: ${parsed.decision} | Scores: ${JSON.stringify(parsed.scores)} | Reason: ${parsed.reason}`);
-    return parsed;
+    return extractJson(text);
   } catch (err) {
-    console.error(`[BRAIN][GEMINI] Error: ${err.message}`);
-    if (GROQ_API_KEY) {
-      console.log('[BRAIN] Falling back to Groq...');
-      return evaluateWithGroq(article);
-    }
+    if (GROQ_API_KEY) return evaluateWithGroq(article);
     throw err;
   }
 }
@@ -357,7 +334,7 @@ async function evaluateWithGroq(article) {
       const res = await axios.post('https://api.groq.com/openai/v1/chat/completions', {
         model: model,
         messages: [
-          { role: 'system', content: 'You are the Chief Editor for NAGORIK DESK. Output strict JSON only.' },
+          { role: 'system', content: 'You are the Chief Editor for Jonobarta (জনবার্তা). Output strict JSON only.' },
           { role: 'user', content: prompt }
         ],
         temperature: 0.6,
@@ -368,7 +345,7 @@ async function evaluateWithGroq(article) {
       });
       const text = res.data.choices[0].message.content;
       const parsed = extractJson(text);
-      console.log(`[BRAIN][GROQ] Model: ${model} | Decision: ${parsed.decision} | Scores: ${JSON.stringify(parsed.scores)}`);
+      console.log(`[BRAIN][GROQ] Model: ${model} | Decision: ${parsed.decision} | Category: ${parsed.category}`);
       return parsed;
     } catch (err) {
       lastError = err;
@@ -379,8 +356,6 @@ async function evaluateWithGroq(article) {
   }
   throw lastError || new Error('All Groq model attempts failed');
 }
-
-const DEFAULT_BRAND_PHOTO = 'https://raw.githubusercontent.com/madrasa-2026/daily-news-harness/master/assets/nagorik_desk_brand.jpg';
 
 async function extractEditorialPhoto(url) {
   if (!url) return null;
@@ -410,52 +385,54 @@ async function extractEditorialPhoto(url) {
   return null;
 }
 
-async function sendToPabbly(article, evalResult, cardResult = null) {
-  const rewrittenPost = (typeof evalResult === 'string' ? evalResult : (evalResult?.rewrittenPost || evalResult?.rewritten_post)) || `${article.title}\n\n📌 তথ্যসূত্র: ${article.feedTitle || 'অনলাইন ডেস্ক'}`;
-  const commentLink = (typeof evalResult === 'object' && (evalResult.commentLink || evalResult.comment_link)) ? (evalResult.commentLink || evalResult.comment_link) : `🔗 মূল খবরের লিংক: ${article.link}`;
-
+async function sendToWebhook(article, savedArticle, cardResult) {
   const baseUrl = (process.env.RENDER_EXTERNAL_URL || process.env.APP_BASE_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
-  
-  // STRICT PURE TEXT MODE: NO IMAGE (User explicitly instructed: JUST TEXT, NO IMAGE)
-  const photoUrl = '';
+  const websiteArticleUrl = `${baseUrl}/news/${savedArticle.slug}`;
+  const cardUrl = cardResult?.publicUrl ? `${baseUrl}${cardResult.publicUrl}` : '';
 
-  if (!PABBLY_WEBHOOK_URL) {
-    console.warn('[PUBLISH] PABBLY_WEBHOOK_URL not set - skipping publish (logging only)');
-    console.log(`[PUBLISH][DRY-RUN] Would send: ${rewrittenPost.slice(0, 200)}...`);
-    return { dryRun: true };
-  }
+  const postText = `${savedArticle.rewrittenPost || savedArticle.title}\n\n📌 তথ্যসূত্র: ${savedArticle.sourceFeed || 'জনবার্তা ডেস্ক'}\n🔗 সম্পূর্ণ সংবাদটি পড়তে ভিজিট করুন:\n${websiteArticleUrl}`;
+
   const payload = {
-    title: article.title,
-    original_url: article.link,
-    link: article.link,
-    source: article.feedTitle,
-    published_at: article.pubDate,
-    rewritten_post: rewrittenPost,
-    content: rewrittenPost,
-    message: rewrittenPost,
-    post_text: rewrittenPost,
-    description: rewrittenPost,
-    photo_url: photoUrl,
-    image_url: photoUrl,
-    card_url: photoUrl,
-    has_card: false,
-    comment_link: commentLink,
-    first_comment: commentLink,
+    title: savedArticle.title,
+    headline: savedArticle.title,
+    category: savedArticle.category,
+    summary: savedArticle.summary,
+    original_url: savedArticle.sourceUrl,
+    website_url: websiteArticleUrl,
+    link: websiteArticleUrl,
+    source: savedArticle.sourceFeed,
+    published_at: savedArticle.publishedAt,
+    rewritten_post: postText,
+    content: postText,
+    message: postText,
+    post_text: postText,
+    card_url: cardUrl,
+    photo_url: cardUrl || savedArticle.photoUrl,
+    image_url: cardUrl || savedArticle.photoUrl,
+    has_card: !!cardUrl,
     generated_at: new Date().toISOString()
   };
-  console.log(`[PUBLISH] Sending viral payload to Pabbly webhook...`);
-  console.log(`[PUBLISH] URL: ${PABBLY_WEBHOOK_URL.slice(0, 60)}...`);
-  if (photoUrl) console.log(`[PUBLISH] Attached News Card: ${photoUrl}`);
+
+  if (!PABBLY_WEBHOOK_URL) {
+    console.warn('[PUBLISH] Webhook URL not set - skipping webhook dispatch (article saved to website)');
+    return { dryRun: true };
+  }
+
+  console.log(`[PUBLISH] Sending Jonobarta payload to Webhook (Make.com / Pabbly)...`);
+  console.log(`[PUBLISH] Webhook URL: ${PABBLY_WEBHOOK_URL.slice(0, 60)}...`);
+  console.log(`[PUBLISH] Target Article URL: ${websiteArticleUrl}`);
+  
   try {
     const res = await axios.post(PABBLY_WEBHOOK_URL, payload, {
       headers: { 'Content-Type': 'application/json' },
       timeout: 20000
     });
-    console.log(`[PUBLISH] Success! Status: ${res.status} | Response: ${JSON.stringify(res.data).slice(0, 200)}`);
+    console.log(`[PUBLISH] Webhook Success! Status: ${res.status}`);
     return res.data;
   } catch (err) {
-    console.error(`[PUBLISH] Failed: ${err.response ? `Status ${err.response.status} - ${JSON.stringify(err.response.data).slice(0, 300)}` : err.message}`);
-    throw err;
+    console.error(`[PUBLISH] Webhook Failed: ${err.message}`);
+    // Article is still published on the website!
+    return { error: err.message };
   }
 }
 
@@ -463,7 +440,7 @@ let isRunning = false;
 
 async function runNewsCycle(trigger = 'cron') {
   if (process.env.HOLD_POSTING === 'true') {
-    console.log('[CYCLE] Posting is currently ON HOLD by user request (HOLD_POSTING=true). Skipping cycle.');
+    console.log('[CYCLE] Posting is currently ON HOLD (HOLD_POSTING=true). Skipping cycle.');
     return { skipped: true, reason: 'hold_posting_enabled' };
   }
   if (isRunning) {
@@ -472,14 +449,11 @@ async function runNewsCycle(trigger = 'cron') {
   }
   isRunning = true;
   console.log(`\n========================================`);
-  console.log(`[CYCLE] Starting news cycle | Trigger: ${trigger} | Time: ${new Date().toISOString()}`);
+  console.log(`[CYCLE] Starting Jonobarta News Cycle | Trigger: ${trigger} | Time: ${new Date().toISOString()}`);
   console.log(`========================================`);
   const summary = { fetched: 0, evaluated: 0, passed: 0, published: 0, errors: 0 };
 
   try {
-    if (!GEMINI_API_KEY && !GROQ_API_KEY) console.warn('[CYCLE] WARNING: No LLM key set! Set GEMINI_API_KEY or GROQ_API_KEY');
-    if (!PABBLY_WEBHOOK_URL) console.warn('[CYCLE] WARNING: No PABBLY_WEBHOOK_URL set - will run in dry-run mode');
-
     const { fresh, processed } = await fetchRssArticles();
     summary.fetched = fresh.length;
 
@@ -507,15 +481,45 @@ async function runNewsCycle(trigger = 'cron') {
         }
 
         summary.passed++;
-        console.log(`[CYCLE] PASSED - rewriting ready, generating news card & publishing...`);
-        console.log(`[CYCLE] Rewritten preview: ${result.rewrittenPost.slice(0, 200)}...`);
+        console.log(`[CYCLE] PASSED - generating news card & publishing to Jonobarta website & Facebook...`);
 
-        // Approach A: Pure high-impact text publishing (no synthetic/cheap AI image cards)
-        const cardResult = null;
+        // 1. Extract photo
+        const photoUrl = await extractEditorialPhoto(article.link);
 
-        await sendToPabbly(article, result, cardResult);
+        // 2. Generate HD News Card
+        let cardResult = null;
+        try {
+          cardResult = await generateCardSvg({
+            id: Date.now().toString(36),
+            title: result.title || article.title,
+            category: result.category || 'জাতীয়',
+            photoUrl: photoUrl || '',
+            feedTitle: article.feedTitle || 'অনলাইন ডেস্ক'
+          });
+        } catch (cardErr) {
+          console.warn(`[CYCLE] Card generator error: ${cardErr.message}`);
+        }
 
-        // Record in recent stories to prevent cross-source duplicates
+        // 3. Save to Jonobarta Website Database
+        const savedArticle = saveArticle({
+          title: result.title || article.title,
+          category: result.category || 'জাতীয়',
+          summary: result.summary || article.content || '',
+          paragraphs: result.paragraphs || [article.content || ''],
+          speakerQuote: result.speakerQuote || null,
+          rewrittenPost: result.rewrittenPost || '',
+          cardUrl: cardResult?.publicUrl || '',
+          photoUrl: photoUrl || '',
+          sourceFeed: article.feedTitle || 'জনবার্তা ডেস্ক',
+          sourceUrl: article.link,
+          tags: result.tags || ['জনবার্তা', result.category || 'সংবাদ'],
+          publishedAt: article.pubDate || new Date().toISOString()
+        });
+
+        // 4. Send to Webhook (Make.com / Facebook) with link to our website
+        await sendToWebhook(article, savedArticle, cardResult);
+
+        // 5. Record recent story for cross-source dedup
         try {
           const recent = loadRecentStories(RECENT_STORIES_FILE);
           recent.push({
@@ -534,7 +538,6 @@ async function runNewsCycle(trigger = 'cron') {
         console.log(`[CYCLE] Published ${publishedCount}/${MAX_POSTS_PER_CYCLE} for this cycle`);
 
         if (publishedCount < MAX_POSTS_PER_CYCLE && i < fresh.length - 1) {
-          console.log('[CYCLE] Waiting 2s before next article...');
           await new Promise(r => setTimeout(r, 2000));
         }
       } catch (err) {
@@ -557,88 +560,120 @@ async function runNewsCycle(trigger = 'cron') {
   }
 }
 
+// -------------------------------------------------------------
+// WEB PORTAL ROUTES (Jonobarta Frontend)
+// -------------------------------------------------------------
+
+// 1. Homepage
 app.get('/', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>NAGORIK DESK - Automated News Publisher</title>
-      <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .card { background: #1e293b; border-radius: 16px; padding: 2.5rem; max-width: 600px; width: 100%; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); border: 1px solid #334155; text-align: center; }
-        h1 { color: #38bdf8; font-size: 1.8rem; margin-bottom: 0.5rem; }
-        p { color: #94a3b8; font-size: 0.95rem; }
-        .btn { display: inline-block; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; padding: 1rem 2rem; font-size: 1.1rem; font-weight: bold; border-radius: 12px; cursor: pointer; text-decoration: none; margin-top: 1.5rem; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 10px 15px -3px rgba(37,99,235,0.4); }
-        .btn:hover { transform: translateY(-2px); box-shadow: 0 15px 20px -3px rgba(37,99,235,0.6); }
-        .btn:active { transform: translateY(0); }
-        .status { margin-top: 1.5rem; font-size: 0.9rem; color: #4ade80; background: #064e3b; padding: 0.75rem; border-radius: 8px; display: none; }
-        .badge { background: #334155; color: #38bdf8; padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600; margin: 0.2rem; display: inline-block; }
-      </style>
-    </head>
-    <body>
-      <div class="card">
-        <h1>📰 NAGORIK DESK Publisher</h1>
-        <p>Full Professional Digital News Media House | 10–15 Posts/Day (24/7 Cloud) | Pure Text Journalism</p>
-        <div>
-          <span class="badge">Status: Live 24/7</span>
-          <span class="badge">Page: Nagorik Desk</span>
-          <span class="badge">Scope: All News (No Sports)</span>
-          <span class="badge">Format: Pure Text</span>
-          <span class="badge">Pabbly: Connected</span>
-        </div>
-        <br/>
-        <button class="btn" onclick="triggerPost()">🚀 Post Now On-Demand (Exception Slot)</button>
-        <div id="status" class="status"></div>
-        <hr style="border-color: #334155; margin-top: 2rem;"/>
-        <p style="font-size: 0.8rem; color: #64748b;">
-          Direct API Trigger: <a href="/trigger" style="color: #38bdf8;">/trigger</a> | Health: <a href="/health" style="color: #38bdf8;">/health</a> | Status: <a href="/status" style="color: #38bdf8;">/status</a>
-        </p>
-      </div>
-      <script>
-        async function triggerPost() {
-          const el = document.getElementById('status');
-          el.style.display = 'block';
-          el.style.color = '#38bdf8';
-          el.style.background = '#1e3a8a';
-          el.innerText = '⌛ Triggering professional news cycle... fetching, evaluating & publishing...';
-          try {
-            const res = await fetch('/trigger');
-            const data = await res.json();
-            el.style.color = '#4ade80';
-            el.style.background = '#064e3b';
-            el.innerText = '✅ SUCCESS: Viral news cycle triggered! Check Nagorik Desk Facebook page in 30s!';
-          } catch(e) {
-            el.style.color = '#f87171';
-            el.style.background = '#7f1d1d';
-            el.innerText = '❌ Failed to trigger: ' + e.message;
-          }
-        }
-      </script>
-    </body>
-    </html>
-  `);
+  try {
+    const { articles } = getArticles(30);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderHome(articles));
+  } catch (e) {
+    res.status(500).send('Portal Error: ' + e.message);
+  }
 });
 
+// 2. Single News Article View
+app.get('/news/:slug', (req, res) => {
+  try {
+    const slug = req.params.slug;
+    incrementViews(slug);
+    const article = getArticleBySlugOrId(slug);
+    const related = getArticles(6).articles.filter(a => a.slug !== slug && a.id !== slug);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderArticle(article, related));
+  } catch (e) {
+    res.status(500).send('Article View Error: ' + e.message);
+  }
+});
+
+// 3. Category Archive View
+app.get('/category/:category', (req, res) => {
+  try {
+    const catSlug = req.params.category.toLowerCase();
+    const catMap = {
+      national: 'জাতীয়',
+      politics: 'রাজনীতি',
+      economy: 'অর্থনীতি',
+      judiciary: 'আইন ও আদালত',
+      reform: 'সংস্কার ও রাষ্ট্র',
+      campus: 'ক্যাম্পাস ও তরুণ',
+      international: 'আন্তর্জাতিক'
+    };
+    const catName = catMap[catSlug] || req.params.category;
+    const articles = getArticlesByCategory(catName, 30);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderCategory(catName, articles, catSlug));
+  } catch (e) {
+    res.status(500).send('Category View Error: ' + e.message);
+  }
+});
+
+// 4. RSS 2.0 Feed Endpoint
+app.get(['/rss', '/feed.xml'], (req, res) => {
+  try {
+    const baseUrl = (process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
+    const { articles } = getArticles(25);
+
+    const rssXml = `<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+  <title>জনবার্তা | Jonobarta</title>
+  <link>${baseUrl}</link>
+  <description>সত্য, ন্যায় ও জনমানুষের নির্ভীক ডিজিটাল সংবাদমাধ্যম</description>
+  <language>bn</language>
+  <atom:link href="${baseUrl}/rss" rel="self" type="application/rss+xml" />
+  ${articles.map(a => `
+  <item>
+    <title><![CDATA[${a.title}]]></title>
+    <link>${baseUrl}/news/${a.slug}</link>
+    <guid isPermaLink="true">${baseUrl}/news/${a.slug}</guid>
+    <pubDate>${new Date(a.publishedAt).toUTCString()}</pubDate>
+    <description><![CDATA[${a.summary || a.fullContent}]]></description>
+    <category><![CDATA[${a.category}]]></category>
+  </item>
+  `).join('')}
+</channel>
+</rss>`;
+
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.send(rssXml);
+  } catch (e) {
+    res.status(500).send('RSS Error: ' + e.message);
+  }
+});
+
+// -------------------------------------------------------------
+// OPERATIONAL & API ENDPOINTS
+// -------------------------------------------------------------
+
 app.get('/health', (req, res) => {
-  console.log(`[HEALTH] Ping at ${new Date().toISOString()} from ${req.ip}`);
-  res.json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString(), feeds: RSS_FEED_URLS.length });
+  res.json({
+    status: 'ok',
+    brand: 'Jonobarta (জনবার্তা)',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    feeds: RSS_FEED_URLS.length
+  });
 });
 
 app.get('/ping', (req, res) => {
-  console.log(`[PING] Ping at ${new Date().toISOString()}`);
-  res.json({ status: 'alive', timestamp: new Date().toISOString() });
+  res.json({ status: 'alive', brand: 'Jonobarta', timestamp: new Date().toISOString() });
 });
 
 app.get('/trigger', async (req, res) => {
   console.log(`[TRIGGER] Manual trigger requested from ${req.ip}`);
-  res.json({ message: 'Cycle started, check logs', startedAt: new Date().toISOString() });
+  res.json({
+    message: 'Jonobarta news cycle started',
+    brand: 'Jonobarta',
+    startedAt: new Date().toISOString()
+  });
   runNewsCycle('manual').catch(e => console.error(e));
 });
 
 app.post('/trigger', async (req, res) => {
-  console.log(`[TRIGGER] POST trigger from ${req.ip}`);
   res.json({ message: 'Cycle started', startedAt: new Date().toISOString() });
   runNewsCycle('webhook').catch(e => console.error(e));
 });
@@ -646,16 +681,17 @@ app.post('/trigger', async (req, res) => {
 app.get('/status', (req, res) => {
   const processed = loadProcessedUrls();
   const recentStories = loadRecentStories(RECENT_STORIES_FILE);
-  const cardCount = 0;
+  const articles = loadArticles();
 
   res.json({
     status: 'ok',
-    feeds: RSS_FEED_URLS,
-    processedCount: processed.size,
+    brand: 'Jonobarta (জনবার্তা)',
+    website: 'https://daily-news-harness.onrender.com',
+    publishedArticlesCount: articles.length,
+    processedRssCount: processed.size,
     recentStoriesCount: recentStories.length,
-    cardsGenerated: cardCount,
     llmConfigured: !!(GEMINI_API_KEY || GROQ_API_KEY),
-    pabblyConfigured: !!PABBLY_WEBHOOK_URL,
+    webhookConfigured: !!PABBLY_WEBHOOK_URL,
     cronSchedule: CRON_SCHEDULE,
     maxPostsPerCycle: MAX_POSTS_PER_CYCLE
   });
@@ -663,20 +699,19 @@ app.get('/status', (req, res) => {
 
 app.get('/audit', async (req, res) => {
   const auditResults = {
+    brand: 'Jonobarta (জনবার্তা)',
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.round(process.uptime()),
     nodeVersion: process.version,
     env: {
       port: PORT,
       llmProvider: GEMINI_API_KEY ? 'Gemini' : GROQ_API_KEY ? 'Groq' : 'NONE',
-      llmConfigured: !!(GEMINI_API_KEY || GROQ_API_KEY),
       groqModel: GROQ_MODEL,
-      pabblyConfigured: !!PABBLY_WEBHOOK_URL,
-      pabblyUrlMasked: PABBLY_WEBHOOK_URL ? PABBLY_WEBHOOK_URL.slice(0, 45) + '...' : 'NOT_SET',
-      maxPostsPerCycle: MAX_POSTS_PER_CYCLE,
+      webhookConfigured: !!PABBLY_WEBHOOK_URL,
       cronSchedule: CRON_SCHEDULE,
       holdPosting: process.env.HOLD_POSTING === 'true'
     },
+    articlesInPortal: loadArticles().length,
     feeds: []
   };
 
@@ -709,18 +744,14 @@ app.get('/audit', async (req, res) => {
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`\n========================================`);
-    console.log(`[SERVER] Daily News Harness running on port ${PORT}`);
-    console.log(`[SERVER] Health: http://localhost:${PORT}/health`);
-    console.log(`[SERVER] Ping: http://localhost:${PORT}/ping`);
-    console.log(`[SERVER] Manual trigger: http://localhost:${PORT}/trigger`);
-    console.log(`[SERVER] Status: http://localhost:${PORT}/status`);
-    console.log(`[SERVER] Full Audit: http://localhost:${PORT}/audit`);
-    console.log(`[SERVER] Feeds configured: ${RSS_FEED_URLS.length}`);
-    console.log(`[SERVER] LLM: ${GEMINI_API_KEY ? 'Gemini (' + GEMINI_MODEL + ')' : GROQ_API_KEY ? 'Groq' : 'NOT SET - add GEMINI_API_KEY!'}`);
-    console.log(`[SERVER] Pabbly: ${PABBLY_WEBHOOK_URL ? 'SET' : 'NOT SET - add PABBLY_WEBHOOK_URL!'}`);
+    console.log(`[JONOBARTA] Daily News Engine & Web Portal running on port ${PORT}`);
+    console.log(`[JONOBARTA] Portal Homepage: http://localhost:${PORT}/`);
+    console.log(`[JONOBARTA] RSS Feed: http://localhost:${PORT}/rss`);
+    console.log(`[JONOBARTA] Health: http://localhost:${PORT}/health`);
+    console.log(`[JONOBARTA] Trigger: http://localhost:${PORT}/trigger`);
+    console.log(`[JONOBARTA] Status: http://localhost:${PORT}/status`);
+    console.log(`[JONOBARTA] Audit: http://localhost:${PORT}/audit`);
     console.log(`========================================\n`);
-
-    if (RSS_FEED_URLS.length === 0) console.warn('[SERVER] WARNING: RSS_FEED_URLS is empty!');
 
     cron.schedule(CRON_SCHEDULE, () => {
       console.log(`[CRON] Triggered scheduled run at ${new Date().toISOString()}`);
@@ -728,12 +759,10 @@ if (require.main === module) {
     });
 
     console.log(`[CRON] Scheduled: ${CRON_SCHEDULE}`);
-    console.log('[CRON] Keep-alive: ping /health every 5 min via cron-job.org');
   });
 }
 
 process.on('unhandledRejection', (err) => console.error('[UNHANDLED]', err));
 process.on('uncaughtException', (err) => console.error('[UNCAUGHT]', err));
 
-module.exports = { app, runNewsCycle, fetchRssArticles, sendToPabbly, evaluateWithGroq, evaluateWithGemini };
-
+module.exports = { app, runNewsCycle, fetchRssArticles, evaluateWithGroq, evaluateWithGemini };
