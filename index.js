@@ -7,7 +7,7 @@ const axios = require('axios');
 const fs = require('fs');
 const { normalizeUrl, loadRecentStories, saveRecentStories, checkDuplicateStory } = require('./utils/dedup');
 const { saveArticle, getArticles, getArticleBySlugOrId, getArticlesByCategory, incrementViews, loadArticles } = require('./utils/storage');
-const { generateCardSvg } = require('./utils/card_generator');
+const { generateNewsCard, CARDS_DIR } = require('./utils/cardGenerator');
 const { renderHome } = require('./portal/templates/home');
 const { renderArticle } = require('./portal/templates/article');
 const { renderCategory } = require('./portal/templates/category');
@@ -23,7 +23,7 @@ app.use('/images', express.static(path.join(__dirname, 'portal', 'public', 'imag
 
 const PORT = process.env.PORT || 10000;
 
-// Load secure cloud configuration fallback
+// Load configuration
 const cloudConfigFile = path.join(__dirname, 'config.production.json');
 let cloudConfig = {};
 if (fs.existsSync(cloudConfigFile)) {
@@ -41,7 +41,7 @@ const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || cloudConfig.RSS_FEED_URLS ||
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || cloudConfig.GEMINI_API_KEY || '';
 const GROQ_API_KEY = process.env.GROQ_API_KEY || cloudConfig.GROQ_API_KEY || '';
 const GROQ_MODEL = process.env.GROQ_MODEL || cloudConfig.GROQ_MODEL || 'openai/gpt-oss-120b';
-const PABBLY_WEBHOOK_URL = process.env.MAKE_WEBHOOK_URL || cloudConfig.MAKE_WEBHOOK_URL || process.env.PABBLY_WEBHOOK_URL || cloudConfig.PABBLY_WEBHOOK_URL || '';
+const PABBLY_WEBHOOK_URL = process.env.MAKE_WEBHOOK_URL || process.env.PABBLY_WEBHOOK_URL || '';
 const MAX_POSTS_PER_CYCLE = parseInt(process.env.MAX_POSTS_PER_CYCLE || cloudConfig.MAX_POSTS_PER_CYCLE || '1', 10);
 const GEMINI_MODEL = process.env.GEMINI_MODEL || cloudConfig.GEMINI_MODEL || 'gemini-1.5-flash';
 const CRON_SCHEDULE = process.env.CRON_SCHEDULE || cloudConfig.CRON_SCHEDULE || '0 * * * *';
@@ -386,9 +386,20 @@ async function extractEditorialPhoto(url) {
 }
 
 async function sendToWebhook(article, savedArticle, cardResult) {
-  const baseUrl = (process.env.RENDER_EXTERNAL_URL || process.env.APP_BASE_URL || `http://localhost:${PORT}`).replace(/\/+$/, '');
+  const defaultPublicBase = 'https://daily-news-harness.onrender.com';
+  const baseUrl = (process.env.RENDER_EXTERNAL_URL || process.env.APP_BASE_URL || defaultPublicBase).replace(/\/+$/, '');
   const websiteArticleUrl = `${baseUrl}/news/${savedArticle.slug}`;
-  const cardUrl = cardResult?.publicUrl ? `${baseUrl}${cardResult.publicUrl}` : '';
+
+  // Resolve public image URL for Facebook
+  let publicImageUrl = '';
+  if (cardResult?.cdnUrl) {
+    publicImageUrl = cardResult.cdnUrl;
+  } else if (cardResult?.relativeUrl) {
+    publicImageUrl = `${baseUrl}${cardResult.relativeUrl}`;
+  }
+  if (!publicImageUrl && savedArticle.photoUrl) {
+    publicImageUrl = savedArticle.photoUrl;
+  }
 
   const postText = `${savedArticle.rewrittenPost || savedArticle.title}\n\n📌 তথ্যসূত্র: ${savedArticle.sourceFeed || 'জনবার্তা ডেস্ক'}\n🔗 সম্পূর্ণ সংবাদটি পড়তে ভিজিট করুন:\n${websiteArticleUrl}`;
 
@@ -406,10 +417,10 @@ async function sendToWebhook(article, savedArticle, cardResult) {
     content: postText,
     message: postText,
     post_text: postText,
-    card_url: cardUrl,
-    photo_url: cardUrl || savedArticle.photoUrl,
-    image_url: cardUrl || savedArticle.photoUrl,
-    has_card: !!cardUrl,
+    card_url: publicImageUrl,
+    photo_url: publicImageUrl,
+    image_url: publicImageUrl,
+    has_card: !!publicImageUrl,
     generated_at: new Date().toISOString()
   };
 
@@ -486,15 +497,14 @@ async function runNewsCycle(trigger = 'cron') {
         // 1. Extract photo
         const photoUrl = await extractEditorialPhoto(article.link);
 
-        // 2. Generate HD News Card
+        // 2. Generate HD News Card (1200x630 PNG)
         let cardResult = null;
         try {
-          cardResult = await generateCardSvg({
-            id: Date.now().toString(36),
+          cardResult = await generateNewsCard({
             title: result.title || article.title,
-            category: result.category || 'জাতীয়',
-            photoUrl: photoUrl || '',
-            feedTitle: article.feedTitle || 'অনলাইন ডেস্ক'
+            snippet: result.summary || article.content || '',
+            source: article.feedTitle || 'অনলাইন ডেস্ক',
+            link: article.link
           });
         } catch (cardErr) {
           console.warn(`[CYCLE] Card generator error: ${cardErr.message}`);
@@ -508,7 +518,7 @@ async function runNewsCycle(trigger = 'cron') {
           paragraphs: result.paragraphs || [article.content || ''],
           speakerQuote: result.speakerQuote || null,
           rewrittenPost: result.rewrittenPost || '',
-          cardUrl: cardResult?.publicUrl || '',
+          cardUrl: cardResult?.relativeUrl || '',
           photoUrl: photoUrl || '',
           sourceFeed: article.feedTitle || 'জনবার্তা ডেস্ক',
           sourceUrl: article.link,
@@ -682,12 +692,16 @@ app.get('/status', (req, res) => {
   const processed = loadProcessedUrls();
   const recentStories = loadRecentStories(RECENT_STORIES_FILE);
   const articles = loadArticles();
+  const cardsCount = fs.existsSync(CARDS_DIR)
+    ? fs.readdirSync(CARDS_DIR).filter(f => f.endsWith('.png')).length
+    : 0;
 
   res.json({
     status: 'ok',
     brand: 'Jonobarta (জনবার্তা)',
     website: 'https://daily-news-harness.onrender.com',
     publishedArticlesCount: articles.length,
+    cardsGenerated: cardsCount,
     processedRssCount: processed.size,
     recentStoriesCount: recentStories.length,
     llmConfigured: !!(GEMINI_API_KEY || GROQ_API_KEY),
@@ -743,8 +757,10 @@ app.get('/audit', async (req, res) => {
 
 if (require.main === module) {
   app.listen(PORT, () => {
+    const maskedWebhook = PABBLY_WEBHOOK_URL ? `${PABBLY_WEBHOOK_URL.slice(0, 12)}...` : 'NOT_CONFIGURED';
     console.log(`\n========================================`);
     console.log(`[JONOBARTA] Daily News Engine & Web Portal running on port ${PORT}`);
+    console.log(`[CONFIG] Webhook URL configured: ${maskedWebhook}`);
     console.log(`[JONOBARTA] Portal Homepage: http://localhost:${PORT}/`);
     console.log(`[JONOBARTA] RSS Feed: http://localhost:${PORT}/rss`);
     console.log(`[JONOBARTA] Health: http://localhost:${PORT}/health`);

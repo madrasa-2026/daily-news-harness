@@ -247,10 +247,10 @@ function buildCardHtml({ headline, subtext, category, source, dateStr }) {
   <div class="content-wrapper">
     <div class="header">
       <div class="brand">
-        <div class="logo-icon">না</div>
+        <div class="logo-icon">জ</div>
         <div class="brand-text">
-          <h1>নাগরিক ডেস্ক</h1>
-          <p>NAGORIK DESK • NEWS</p>
+          <h1>জনবার্তা</h1>
+          <p>JONOBARTA • সত্য ও ন্যায়ের কণ্ঠ</p>
         </div>
       </div>
       <div class="badge-breaking">
@@ -267,7 +267,7 @@ function buildCardHtml({ headline, subtext, category, source, dateStr }) {
 
     <div class="footer">
       <div class="source"><span class="source-dot">●</span> সূত্র: ${cleanSource}</div>
-      <div>facebook.com/NagorikDesk • ${dateStr}</div>
+      <div>jonobarta.com • ${dateStr}</div>
     </div>
   </div>
 </body>
@@ -281,7 +281,14 @@ async function uploadToCdn(imagePath) {
     const fd = new FormData();
     fd.append('reqtype', 'fileupload');
     fd.append('fileToUpload', blob, path.basename(imagePath));
-    const res = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: fd });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const res = await fetch('https://catbox.moe/user/api.php', {
+      method: 'POST',
+      body: fd,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
     const url = (await res.text()).trim();
     if (url.startsWith('http')) {
       console.log(`[CARD] Uploaded to CDN: ${url}`);

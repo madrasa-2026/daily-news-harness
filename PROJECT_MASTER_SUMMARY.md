@@ -78,7 +78,7 @@
 
 ### A. Make.com (EU2 Region)
 - **Scenario URL**: `https://eu2.make.com/1947110/scenarios/9939541/edit`
-- **Webhook Endpoint**: `https://hook.eu2.make.com/fq5tx5zmwnrrkdvx7q6a1pxsiqn1y2mf`
+- **Webhook Endpoint**: `https://example.com/webhook-placeholder`
 - **Status**: `Active` (Turned ON)
 - **Execution Mode**: `Immediately as data arrives`
 - **Scenario Pipeline**:

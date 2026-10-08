@@ -1,10 +1,12 @@
 node_modules/
 .env
+.env.*
+config.production.json
 npm-debug.log
 .DS_Store
 scratch*.js
 .archive/
 *.png
+!portal/public/images/*.png
 public/cards/*
 !public/cards/.gitkeep
-
