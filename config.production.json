@@ -1,6 +1,7 @@
 {
   "GROQ_MODEL": "openai/gpt-oss-120b",
-  "PABBLY_WEBHOOK_URL": "https://connect.pabbly.com/workflow/sendwebhookdata/IjU3NjcwNTY4MDYzNTA0MzE1MjZkNTUzMzUxMzEi_pc",
+  "PABBLY_WEBHOOK_URL": "https://hook.eu2.make.com/fq5tx5zmwnrrkdvx7q6a1pxsiqn1y2mf",
+  "MAKE_WEBHOOK_URL": "https://hook.eu2.make.com/fq5tx5zmwnrrkdvx7q6a1pxsiqn1y2mf",
   "RSS_FEED_URLS": "https://www.dailyamardesh.com/feed,https://www.prothomalo.com/feed,https://feeds.bbci.co.uk/bengali/rss.xml,https://www.thedailystar.net/news/bangladesh/rss.xml,https://www.ntvbd.com/rss.xml,https://www.channelionline.com/feed",
   "MAX_POSTS_PER_CYCLE": 1,
   "HOLD_POSTING": "false",
