@@ -1,33 +1,31 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 120" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 100" width="100%" height="100%">
   <defs>
-    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#047857" />
-      <stop offset="100%" stop-color="#064e3b" />
+    <linearGradient id="jbRed" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#b91c1c" />
+      <stop offset="100%" stop-color="#991b1b" />
     </linearGradient>
-    <linearGradient id="crimsonGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ef4444" />
-      <stop offset="100%" stop-color="#b91c1c" />
-    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.15" />
+    </filter>
   </defs>
-  
-  <!-- Icon Emblem -->
-  <g transform="translate(10, 10)">
-    <!-- Shield / Badge Base -->
-    <rect x="0" y="0" width="100" height="100" rx="22" fill="url(#emeraldGrad)" />
-    <!-- Dynamic Red Accent Wing -->
-    <path d="M 50 15 L 85 50 L 50 85 L 35 70 L 60 50 L 35 30 Z" fill="url(#crimsonGrad)" opacity="0.95" />
-    <!-- Center Quill / Spark -->
-    <circle cx="45" cy="50" r="14" fill="#ffffff" />
-    <circle cx="45" cy="50" r="7" fill="#dc2626" />
+
+  <!-- News Emblem Badge -->
+  <g transform="translate(10, 10)" filter="url(#shadow)">
+    <rect x="0" y="0" width="80" height="80" rx="16" fill="url(#jbRed)" />
+    <!-- White Geometric 'জ' Broadcast Monogram -->
+    <path d="M 22 28 L 58 28 L 58 34 L 28 34 L 28 44 C 34 40, 48 40, 54 47 C 60 54, 57 65, 48 68 C 39 71, 30 67, 28 60 L 35 57 C 36 61, 41 63, 46 62 C 50 60, 52 54, 48 50 C 44 46, 34 46, 28 50 Z" fill="#ffffff" />
+    <!-- Digital Broadcast Arc -->
+    <path d="M 52 20 A 18 18 0 0 1 68 36" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" />
+    <circle cx="56" cy="24" r="3" fill="#ffffff" />
   </g>
 
-  <!-- Typography: Bengali Name -->
-  <text x="125" y="70" font-family="'Hind Siliguri', 'Noto Sans Bengali', 'SolaimanLipi', sans-serif" font-size="56" font-weight="900" fill="#047857" letter-spacing="-0.5">
-    জন<tspan fill="#dc2626">বার্তা</tspan>
+  <!-- Bengali Typography -->
+  <text x="105" y="58" font-family="'Noto Serif Bengali', 'Hind Siliguri', 'SolaimanLipi', sans-serif" font-size="46" font-weight="900" fill="#0f172a" letter-spacing="-0.5">
+    জন<tspan fill="#b91c1c">বার্তা</tspan>
   </text>
-  
-  <!-- English Tagline & Slogan -->
-  <text x="128" y="100" font-family="'Segoe UI', Roboto, sans-serif" font-size="14" font-weight="700" fill="#64748b" letter-spacing="3.5">
+
+  <!-- English Subtext & Slogan -->
+  <text x="108" y="82" font-family="'Segoe UI', Roboto, sans-serif" font-size="12" font-weight="700" fill="#64748b" letter-spacing="2.5">
     JONOBARTA • সত্য ও ন্যায়ের কণ্ঠ
   </text>
 </svg>
