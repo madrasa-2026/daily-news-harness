@@ -83,8 +83,15 @@ function detectCategory(text = '') {
 function buildCardHtml({ headline, subtext, category, source, dateStr }) {
   const cleanHeadline = (headline || '').replace(/["'<>]/g, '').trim();
   const cleanSubtext = (subtext || '').replace(/["'<>]/g, '').trim();
-  const cleanCategory = (category || 'জাতীয় রাজনীতি').trim();
-  const cleanSource = (source || 'নাগরিক ডেস্ক').trim();
+  const cleanCategory = (category || 'জাতীয়').trim();
+  const cleanSource = (source || 'জনবার্তা ডেস্ক').trim();
+
+  // Auto-shrink font size logic based on headline character length
+  const len = cleanHeadline.length;
+  let headlineFontSize = 56;
+  if (len > 90) headlineFontSize = 42;
+  else if (len > 70) headlineFontSize = 46;
+  else if (len > 48) headlineFontSize = 50;
 
   return `<!DOCTYPE html>
 <html lang="bn">
@@ -92,182 +99,168 @@ function buildCardHtml({ headline, subtext, category, source, dateStr }) {
   <meta charset="UTF-8">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@500;600;700;800&family=Noto+Serif+Bengali:wght@700;800;900&display=swap" rel="stylesheet">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Hind Siliguri', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Hind Siliguri', 'Noto Serif Bengali', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
     body {
       width: 1200px;
-      height: 675px;
-      background: linear-gradient(135deg, #0b132b 0%, #1c2541 50%, #0b132b 100%);
+      height: 630px;
+      background-color: #d61f2c;
       color: #ffffff;
+      padding: 45px 80px 40px 80px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: 50px 60px;
-      position: relative;
       overflow: hidden;
-    }
-    body::before {
-      content: "";
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background-image: 
-        radial-gradient(circle at 80% 20%, rgba(220, 38, 38, 0.18) 0%, transparent 45%),
-        radial-gradient(circle at 20% 80%, rgba(37, 99, 235, 0.16) 0%, transparent 45%),
-        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-      background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
-      z-index: 1;
-    }
-    .content-wrapper {
       position: relative;
-      z-index: 2;
-      height: 100%;
+    }
+    
+    /* 1. Thin darker red top bar with white category label */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .category-label {
+      background: #a3121f;
+      color: #ffffff;
+      font-size: 21px;
+      font-weight: 700;
+      padding: 6px 20px;
+      border-radius: 4px;
+      display: inline-block;
+      letter-spacing: 0.5px;
+    }
+    .top-line {
+      flex: 1;
+      height: 2px;
+      background: rgba(163, 18, 31, 0.7);
+    }
+
+    /* 2. Hero Headline & Subtext */
+    .content-area {
+      flex: 1;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
-    }
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 2px solid rgba(255, 255, 255, 0.15);
-      padding-bottom: 20px;
-    }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 15px;
-    }
-    .logo-icon {
-      width: 52px;
-      height: 52px;
-      background: linear-gradient(135deg, #dc2626, #ef4444);
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
       justify-content: center;
-      font-size: 28px;
-      font-weight: 800;
-      box-shadow: 0 4px 15px rgba(220, 38, 38, 0.5);
-    }
-    .brand-text h1 {
-      font-size: 28px;
-      font-weight: 800;
-      letter-spacing: 0.5px;
-      color: #ffffff;
-      line-height: 1.1;
-    }
-    .brand-text p {
-      font-size: 13px;
-      color: #94a3b8;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      margin-top: 2px;
-    }
-    .badge-breaking {
-      background: #dc2626;
-      color: #ffffff;
-      font-size: 18px;
-      font-weight: 700;
-      padding: 8px 22px;
-      border-radius: 30px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
-    }
-    .pulse-dot {
-      width: 10px;
-      height: 10px;
-      background: #ffffff;
-      border-radius: 50%;
-    }
-    .main {
-      margin: auto 0;
-      padding: 10px 0;
-    }
-    .category-tag {
-      color: #38bdf8;
-      font-size: 20px;
-      font-weight: 700;
-      margin-bottom: 16px;
-      display: inline-block;
-      background: rgba(56, 189, 248, 0.12);
-      padding: 4px 14px;
-      border-radius: 6px;
-      border-left: 4px solid #38bdf8;
+      padding: 15px 0;
     }
     .headline {
-      font-size: 44px;
-      font-weight: 800;
-      line-height: 1.35;
-      color: #f8fafc;
-      text-shadow: 0 2px 10px rgba(0,0,0,0.5);
-      margin-bottom: 18px;
-      display: -webkit-box;
-      -webkit-line-clamp: 3;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-    .subtext {
-      font-size: 23px;
-      font-weight: 500;
-      color: #cbd5e1;
-      line-height: 1.45;
-      max-width: 96%;
+      font-family: 'Noto Serif Bengali', 'Hind Siliguri', serif;
+      font-size: ${headlineFontSize}px;
+      font-weight: 900;
+      line-height: 1.25;
+      color: #ffffff;
+      margin-bottom: 16px;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
+      word-break: break-word;
     }
-    .footer {
+    .subtext {
+      font-size: 24px;
+      font-weight: 500;
+      color: #f1f5f9;
+      line-height: 1.45;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      opacity: 0.95;
+    }
+
+    /* 3. Bottom Strip */
+    .bottom-strip {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      border-top: 1px solid rgba(255, 255, 255, 0.25);
       padding-top: 18px;
-      font-size: 16px;
-      color: #94a3b8;
     }
-    .source {
+    .brand-bug {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .bug-icon {
+      width: 46px;
+      height: 46px;
+      background: #ffffff;
+      color: #d61f2c;
+      font-size: 30px;
+      font-weight: 900;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    }
+    .brand-text-wrap {
+      display: flex;
+      flex-direction: column;
+    }
+    .brand-title {
+      font-family: 'Noto Serif Bengali', 'Hind Siliguri', serif;
+      font-size: 26px;
+      font-weight: 900;
+      color: #ffffff;
+      line-height: 1.1;
+      letter-spacing: 0.5px;
+    }
+    .brand-slogan {
+      font-size: 13px;
+      font-weight: 600;
+      color: #f8fafc;
+      opacity: 0.85;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+    .meta-info {
+      font-size: 19px;
+      font-weight: 600;
+      color: #f1f5f9;
       display: flex;
       align-items: center;
       gap: 8px;
-      color: #f1f5f9;
-      font-weight: 600;
     }
-    .source-dot {
-      color: #dc2626;
-      font-size: 18px;
+    .meta-dot {
+      opacity: 0.6;
     }
   </style>
 </head>
 <body>
-  <div class="content-wrapper">
-    <div class="header">
-      <div class="brand">
-        <div class="logo-icon">জ</div>
-        <div class="brand-text">
-          <h1>জনবার্তা</h1>
-          <p>JONOBARTA • সত্য ও ন্যায়ের কণ্ঠ</p>
-        </div>
-      </div>
-      <div class="badge-breaking">
-        <div class="pulse-dot"></div>
-        ব্রেকিং নিউজ
+  <!-- 1. Top Bar -->
+  <div class="top-bar">
+    <span class="category-label">${cleanCategory}</span>
+    <div class="top-line"></div>
+  </div>
+
+  <!-- 2. Hero Headline & Subtext -->
+  <div class="content-area">
+    <h1 class="headline">${cleanHeadline}</h1>
+    ${cleanSubtext ? `<p class="subtext">${cleanSubtext}</p>` : ''}
+  </div>
+
+  <!-- 3. Bottom Strip -->
+  <div class="bottom-strip">
+    <div class="brand-bug">
+      <div class="bug-icon">জ</div>
+      <div class="brand-text-wrap">
+        <span class="brand-title">জনবার্তা</span>
+        <span class="brand-slogan">JONOBARTA • সত্য ও ন্যায়ের কণ্ঠ</span>
       </div>
     </div>
-
-    <div class="main">
-      <div class="category-tag">${cleanCategory}</div>
-      <div class="headline">${cleanHeadline}</div>
-      ${cleanSubtext ? `<div class="subtext">${cleanSubtext}</div>` : ''}
-    </div>
-
-    <div class="footer">
-      <div class="source"><span class="source-dot">●</span> সূত্র: ${cleanSource}</div>
-      <div>jonobarta.com • ${dateStr}</div>
+    <div class="meta-info">
+      <span>সূত্র: ${cleanSource}</span>
+      <span class="meta-dot">•</span>
+      <span>${dateStr}</span>
     </div>
   </div>
 </body>
@@ -337,7 +330,7 @@ async function generateNewsCard({ title, snippet, source, link }) {
     });
 
     const page = await browser.newPage();
-    await page.setViewport({ width: 1200, height: 675, deviceScaleFactor: 2 });
+    await page.setViewport({ width: 1200, height: 630, deviceScaleFactor: 2 });
 
     const category = detectCategory(title + ' ' + (snippet || ''));
     const dateStr = formatBengaliDate(new Date());
