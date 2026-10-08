@@ -2,6 +2,8 @@
 
 > Zero-code knowledge needed. Follow this guide click-by-click and you will have a 24/7 bot that fetches news via RSS, rewrites it with AI, and posts to your Facebook Page via Pabbly.
 
+> **Architecture & Scope Notice**: An experimental SSR web portal was evaluated, but because Render's free tier uses an ephemeral filesystem where disk-persisted articles vanish on container restart, all web portal claims and dead routes have been intentionally cut. This repository is dedicated exclusively as an honest, production-grade automated Facebook news publisher.
+
 ---
 
 ## 📋 What This Does (Simple Explanation)
