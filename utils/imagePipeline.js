@@ -53,16 +53,87 @@ const CATEGORY_KEYWORDS_EN = {
   'মতামত': 'editorial journalism newspaper typewriter'
 };
 
+// Outlet watermark & branded CDN signatures denylist
+// Any tier-1 candidate image matching these patterns is rejected to prevent publishing other outlets' branding
+const OUTLET_WATERMARK_SIGNATURES = [
+  // Prothom Alo CDN & domains
+  'prothomalo.com',
+  'images.prothomalo.com',
+  'media.prothomalo.com',
+  'assets.prothomalo.com',
+  'palo-images',
+  'palo.blob',
+  // Jugantor
+  'jugantor.com',
+  'images.jugantor.com',
+  // Bangla Tribune & Dhaka Tribune
+  'banglatribune.com',
+  'dhakatribune.com',
+  // The Daily Star
+  'thedailystar.net',
+  'daily-star',
+  // Daily Amar Desh
+  'dailyamardesh.com',
+  'amardesh',
+  // Channel i & NTV
+  'channelionline.com',
+  'ntvbd.com',
+  // BD24Live & TBS News
+  'bd24live.com',
+  'tbsnews.net',
+  // BBC Bangla
+  'bbci.co.uk',
+  'bbc.com',
+  // TV channels & dailies with heavy burned-in watermarks
+  'jamuna.tv',
+  'somoynews.tv',
+  'ekattor.tv',
+  'kalerkantho.com',
+  'samakal.com',
+  'ittefaq.com.bd',
+  // Watermark keyword indicators
+  'watermark',
+  'wm_',
+  '_wm',
+  'watermarked',
+  'logo_',
+  '_logo',
+  'channeli-logo',
+  'prothomalo-logo'
+];
+
+/**
+ * Checks whether an image URL matches an outlet watermark or CDN signature
+ */
+function isOutletWatermarkedImage(url) {
+  if (!url || typeof url !== 'string') return false;
+  const lower = url.toLowerCase();
+  for (const sig of OUTLET_WATERMARK_SIGNATURES) {
+    if (lower.includes(sig)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Tier 1: Extract genuine editorial photo from RSS item or article page
+ * Rejects any photo matching outlet watermark/CDN signatures
  */
 async function extractSourcePhoto(article) {
   // 1a. Check RSS enclosures or media tags
   if (article.enclosure?.url && article.enclosure.url.startsWith('http')) {
-    return article.enclosure.url;
+    if (!isOutletWatermarkedImage(article.enclosure.url)) {
+      return article.enclosure.url;
+    }
+    console.warn(`[WATERMARK-GUARD] Rejected RSS enclosure containing outlet branding: ${article.enclosure.url.slice(0, 80)}...`);
   }
   if (article['media:content']?.['$']?.url) {
-    return article['media:content']['$'].url;
+    const mUrl = article['media:content']['$'].url;
+    if (!isOutletWatermarkedImage(mUrl)) {
+      return mUrl;
+    }
+    console.warn(`[WATERMARK-GUARD] Rejected media:content containing outlet branding: ${mUrl.slice(0, 80)}...`);
   }
 
   // 1b. Check article web page og:image
@@ -83,7 +154,10 @@ async function extractSourcePhoto(article) {
       let img = match[1].replace(/&amp;/g, '&').trim();
       if (img.startsWith('//')) img = 'https:' + img;
       if (img.startsWith('http://') || img.startsWith('https://')) {
-        return img;
+        if (!isOutletWatermarkedImage(img)) {
+          return img;
+        }
+        console.warn(`[WATERMARK-GUARD] Rejected og:image containing outlet branding: ${img.slice(0, 80)}...`);
       }
     }
   } catch (e) {
@@ -153,5 +227,7 @@ module.exports = {
   resolveArticleImage,
   extractSourcePhoto,
   fetchStockPhoto,
-  getCategoryEditorialPhoto
+  getCategoryEditorialPhoto,
+  isOutletWatermarkedImage,
+  OUTLET_WATERMARK_SIGNATURES
 };

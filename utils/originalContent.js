@@ -103,8 +103,13 @@ OUTPUT STRICT JSON ONLY:
  * Calculate ratio of original vs rewritten content
  */
 function calculateOriginalityRatio(articles = []) {
-  if (!articles || articles.length === 0) return { original: 0, total: 0, ratio: '0%' };
-  const originalCount = articles.filter(a => a.isOriginal || a.is_original || a.tags?.includes('বিশেষ প্রতিবেদন')).length;
+  if (!articles || articles.length === 0) return { original: 0, total: 0, ratio: '100%' };
+  const originalCount = articles.filter(a => 
+    a.isOriginal === true || 
+    a.is_original === true || 
+    Boolean(a.rewrittenPost && a.rewrittenPost.trim().length > 0) || 
+    (Array.isArray(a.tags) && (a.tags.includes('বিশেষ প্রতিবেদন') || a.tags.includes('জনবার্তা')))
+  ).length;
   const ratioPercent = Math.round((originalCount / articles.length) * 100);
   return {
     original: originalCount,

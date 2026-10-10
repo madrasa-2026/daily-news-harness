@@ -1,9 +1,11 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const axios = require('axios');
 
-const BLOGGER_BLOG_ID = process.env.BLOGGER_BLOG_ID || '';
-const BLOGGER_CLIENT_ID = process.env.BLOGGER_CLIENT_ID || '';
-const BLOGGER_CLIENT_SECRET = process.env.BLOGGER_CLIENT_SECRET || '';
-const BLOGGER_REFRESH_TOKEN = process.env.BLOGGER_REFRESH_TOKEN || '';
+const getBloggerBlogId = () => process.env.BLOGGER_BLOG_ID || '';
+const getBloggerClientId = () => process.env.BLOGGER_CLIENT_ID || '';
+const getBloggerClientSecret = () => process.env.BLOGGER_CLIENT_SECRET || '';
+const getBloggerRefreshToken = () => process.env.BLOGGER_REFRESH_TOKEN || '';
 
 let cachedAccessToken = null;
 let tokenExpiresAt = 0;
@@ -16,15 +18,19 @@ async function getAccessToken() {
     return cachedAccessToken;
   }
 
-  if (!BLOGGER_CLIENT_ID || !BLOGGER_CLIENT_SECRET || !BLOGGER_REFRESH_TOKEN) {
+  const clientId = getBloggerClientId();
+  const clientSecret = getBloggerClientSecret();
+  const refreshToken = getBloggerRefreshToken();
+
+  if (!clientId || !clientSecret || !refreshToken) {
     throw new Error('Missing Blogger OAuth2 credentials (BLOGGER_CLIENT_ID, BLOGGER_CLIENT_SECRET, BLOGGER_REFRESH_TOKEN)');
   }
 
   try {
     const res = await axios.post('https://oauth2.googleapis.com/token', {
-      client_id: BLOGGER_CLIENT_ID,
-      client_secret: BLOGGER_CLIENT_SECRET,
-      refresh_token: BLOGGER_REFRESH_TOKEN,
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
       grant_type: 'refresh_token'
     }, {
       headers: { 'Content-Type': 'application/json' },
@@ -96,12 +102,13 @@ async function publishToBlogger({
   sourceFeed,
   isOriginal = false
 }) {
+  const blogId = getBloggerBlogId();
   const isConfigured = Boolean(
-    BLOGGER_BLOG_ID &&
-    BLOGGER_CLIENT_ID &&
-    BLOGGER_CLIENT_SECRET &&
-    BLOGGER_REFRESH_TOKEN &&
-    !BLOGGER_BLOG_ID.includes('placeholder')
+    blogId &&
+    getBloggerClientId() &&
+    getBloggerClientSecret() &&
+    getBloggerRefreshToken() &&
+    !blogId.includes('placeholder')
   );
 
   if (!isConfigured) {
@@ -136,8 +143,8 @@ async function publishToBlogger({
       labels
     };
 
-    console.log(`[BLOGGER] Publishing to Blog ID ${BLOGGER_BLOG_ID}: "${title.slice(0, 60)}..."`);
-    const endpoint = `https://www.googleapis.com/blogger/v3/blogs/${BLOGGER_BLOG_ID}/posts/`;
+    console.log(`[BLOGGER] Publishing to Blog ID ${blogId}: "${title.slice(0, 60)}..."`);
+    const endpoint = `https://www.googleapis.com/blogger/v3/blogs/${blogId}/posts/`;
     const res = await axios.post(endpoint, payload, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -169,9 +176,48 @@ async function publishToBlogger({
   }
 }
 
+/**
+ * Fetch recent published posts from Blogger API v3
+ */
+async function getRecentBloggerPosts(maxResults = 10) {
+  const blogId = getBloggerBlogId();
+  const isConfigured = Boolean(
+    blogId &&
+    getBloggerClientId() &&
+    getBloggerClientSecret() &&
+    getBloggerRefreshToken() &&
+    !blogId.includes('placeholder')
+  );
+
+  if (!isConfigured) return [];
+
+  try {
+    const accessToken = await getAccessToken();
+    const endpoint = `https://www.googleapis.com/blogger/v3/blogs/${blogId}/posts?maxResults=${maxResults}`;
+    const res = await axios.get(endpoint, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      },
+      timeout: 10000
+    });
+    return res.data?.items || [];
+  } catch (err) {
+    const msg = err.response?.data?.error?.message || err.message;
+    console.warn(`[BLOGGER] Could not fetch recent posts: ${msg}`);
+    return [];
+  }
+}
+
 module.exports = {
   publishToBlogger,
   getAccessToken,
   buildBloggerHtml,
-  isBloggerConfigured: () => Boolean(BLOGGER_BLOG_ID && BLOGGER_CLIENT_ID && BLOGGER_CLIENT_SECRET && BLOGGER_REFRESH_TOKEN)
+  getRecentBloggerPosts,
+  isBloggerConfigured: () => Boolean(
+    getBloggerBlogId() &&
+    getBloggerClientId() &&
+    getBloggerClientSecret() &&
+    getBloggerRefreshToken() &&
+    !getBloggerBlogId().includes('placeholder')
+  )
 };

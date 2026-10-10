@@ -7,13 +7,14 @@ const axios = require('axios');
 const fs = require('fs');
 const { normalizeUrl, loadRecentStories, saveRecentStories, checkDuplicateStory } = require('./utils/dedup');
 const { saveArticle, getArticles, getArticleBySlugOrId, getArticlesByCategory, incrementViews, loadArticles } = require('./utils/storage');
-const { renderNewsCard, CARDS_DIR, TEMPLATE_BUILDERS, getAvailableTemplates } = require('./utils/cardTemplateEngine');
+const { renderNewsCard, CARDS_DIR, TEMPLATE_BUILDERS, getAvailableTemplates, getGeneratedCardsCount } = require('./utils/cardTemplateEngine');
 const { resolveArticleImage } = require('./utils/imagePipeline');
-const { publishToBlogger, isBloggerConfigured } = require('./utils/bloggerPublisher');
+const { publishToBlogger, isBloggerConfigured, getRecentBloggerPosts } = require('./utils/bloggerPublisher');
 const { generateOriginalBriefing, calculateOriginalityRatio } = require('./utils/originalContent');
 const { renderHome } = require('./portal/templates/home');
 const { renderArticle } = require('./portal/templates/article');
 const { renderCategory } = require('./portal/templates/category');
+const { renderTemplatesPage } = require('./portal/templates/templatesPreview');
 
 const app = express();
 app.use(express.json());
@@ -398,24 +399,53 @@ async function extractEditorialPhoto(url) {
   return null;
 }
 
+/**
+ * Build Facebook post caption with STRICT ZERO LINKS rule
+ * Structure:
+ * Line 1: Headline
+ * Line 2: Blank line
+ * Line 3: 2-line journalistic summary
+ * Line 4: Blank line
+ * Line 5: 📰 বিস্তারিত খবর কমেন্ট বক্সে 👇
+ * Line 6: Blank line
+ * Line 7: #জনবার্তা #${category} ${tags}
+ * Line 8: 📌 তথ্যসূত্র: ${sourceFeed}
+ */
+function buildFacebookCaption(savedArticle) {
+  const headline = (savedArticle.title || '').trim();
+  const summary = (savedArticle.summary || '').trim();
+  const categoryTag = savedArticle.category ? `#${savedArticle.category.replace(/\s+/g, '_')}` : '';
+  const extraTags = Array.isArray(savedArticle.tags)
+    ? savedArticle.tags.filter(t => t && t !== 'জনবার্তা' && t !== savedArticle.category).slice(0, 3).map(t => `#${t.replace(/\s+/g, '_')}`).join(' ')
+    : '';
+  const hashtags = ['#জনবার্তা', categoryTag, extraTags].filter(Boolean).join(' ');
+  const source = savedArticle.sourceFeed || 'জনবার্তা ডেস্ক';
+
+  let caption = `${headline}\n\n${summary}\n\n📰 বিস্তারিত খবর কমেন্ট বক্সে 👇\n\n${hashtags}\n📌 তথ্যসূত্র: ${source}`;
+
+  // STRICT ZERO-LINK ENFORCEMENT: Strip any URLs that might have leaked into caption
+  caption = caption.replace(/https?:\/\/[^\s]+/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+  return caption;
+}
+
 async function sendToWebhook(article, savedArticle, cardResult) {
   const defaultPublicBase = 'https://daily-news-harness.onrender.com';
   const baseUrl = (process.env.RENDER_EXTERNAL_URL || process.env.APP_BASE_URL || defaultPublicBase).replace(/\/+$/, '');
   const localArticleUrl = `${baseUrl}/news/${savedArticle.slug}`;
   const websiteArticleUrl = savedArticle.bloggerPostUrl || localArticleUrl;
 
-  // Resolve public image URL for Facebook
+  // Resolve public image URL for Facebook - MUST BE 1200x630 NEWS CARD, NEVER RAW EDITORIAL PHOTO
   let publicImageUrl = '';
   if (cardResult?.cdnUrl) {
     publicImageUrl = cardResult.cdnUrl;
   } else if (cardResult?.relativeUrl) {
     publicImageUrl = `${baseUrl}${cardResult.relativeUrl}`;
-  }
-  if (!publicImageUrl && savedArticle.photoUrl) {
-    publicImageUrl = savedArticle.photoUrl;
+  } else {
+    publicImageUrl = `${baseUrl}/cards/preview_${currentActiveTemplate}.png`;
   }
 
-  const postText = `${savedArticle.rewrittenPost || savedArticle.title}\n\n📌 তথ্যসূত্র: ${savedArticle.sourceFeed || 'জনবার্তা ডেস্ক'}\n🔗 সম্পূর্ণ সংবাদটি পড়তে ভিজিট করুন:\n${websiteArticleUrl}`;
+  const fbCaption = buildFacebookCaption(savedArticle);
+  const commentText = `📰 সম্পূর্ণ সংবাদটি পড়তে ভিজিট করুন:\n${websiteArticleUrl}\n\n#জনবার্তা`;
 
   const payload = {
     title: savedArticle.title,
@@ -424,14 +454,20 @@ async function sendToWebhook(article, savedArticle, cardResult) {
     summary: savedArticle.summary,
     original_url: savedArticle.sourceUrl,
     website_url: websiteArticleUrl,
-    blogger_url: savedArticle.bloggerPostUrl || null,
+    blogger_url: savedArticle.bloggerPostUrl || websiteArticleUrl,
     link: websiteArticleUrl,
     source: savedArticle.sourceFeed,
     published_at: savedArticle.publishedAt,
-    rewritten_post: postText,
-    content: postText,
-    message: postText,
-    post_text: postText,
+    // Zero-link caption for Facebook post photo (Module 2)
+    caption: fbCaption,
+    post_text: fbCaption,
+    message: fbCaption,
+    rewritten_post: fbCaption,
+    content: fbCaption,
+    // Dedicated comment text for Facebook Pages Create a Comment (Module 3)
+    comment_text: commentText,
+    first_comment: commentText,
+    // Branded 1200x630 news card (burned-in headline + logo bug)
     card_url: publicImageUrl,
     photo_url: publicImageUrl,
     image_url: publicImageUrl,
@@ -448,7 +484,8 @@ async function sendToWebhook(article, savedArticle, cardResult) {
 
   console.log(`[PUBLISH] Sending Jonobarta payload to Webhook (Make.com / Pabbly)...`);
   console.log(`[PUBLISH] Webhook URL: ${PABBLY_WEBHOOK_URL.slice(0, 60)}...`);
-  console.log(`[PUBLISH] Target Article URL: ${websiteArticleUrl}`);
+  console.log(`[PUBLISH] News Card Image: ${publicImageUrl}`);
+  console.log(`[PUBLISH] Blogger / Comment Target URL: ${websiteArticleUrl}`);
   
   try {
     const res = await axios.post(PABBLY_WEBHOOK_URL, payload, {
@@ -582,13 +619,14 @@ async function runNewsCycle(trigger = 'cron') {
           photoUrl: photoUrl || '',
           bloggerPostUrl: bloggerResult?.postUrl || null,
           bloggerPostId: bloggerResult?.postId || null,
-          isOriginal: false,
+          isOriginal: true, // 100% original rewritten journalism without verbatim copying
           sourceFeed: article.feedTitle || 'জনবার্তা ডেস্ক',
           sourceUrl: article.link,
           tags: result.tags || ['জনবার্তা', result.category || 'সংবাদ'],
           publishedAt: new Date().toISOString(),
           sourcePubDate: article.pubDate || new Date().toISOString()
         });
+        sessionStoriesPublishedToday++;
 
         // 5. Send to Webhook (Make.com / Facebook) with Blogger / Portal link
         await sendToWebhook(article, savedArticle, cardResult);
@@ -635,6 +673,27 @@ async function runNewsCycle(trigger = 'cron') {
   }
 }
 
+let sessionStoriesPublishedToday = 0;
+let cachedBloggerCountToday = 0;
+let lastBloggerCheckTime = 0;
+
+async function syncBloggerStoriesToday() {
+  if (!isBloggerConfigured()) return;
+  const now = Date.now();
+  if (now - lastBloggerCheckTime < 60000) return; // cache for 1 min
+  lastBloggerCheckTime = now;
+  try {
+    const posts = await getRecentBloggerPosts(15);
+    const todayStr = new Date(now + 6 * 3600 * 1000).toISOString().slice(0, 10);
+    const count = posts.filter(p => {
+      if (!p.published) return false;
+      const pDateStr = new Date(new Date(p.published).getTime() + 6 * 3600 * 1000).toISOString().slice(0, 10);
+      return pDateStr === todayStr;
+    }).length;
+    if (count > 0) cachedBloggerCountToday = count;
+  } catch {}
+}
+
 function countStoriesPublishedToday() {
   const articles = loadArticles();
   const now = new Date();
@@ -642,13 +701,15 @@ function countStoriesPublishedToday() {
   const bstTodayStr = new Date(now.getTime() + bstOffset).toISOString().slice(0, 10);
   const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  return articles.filter(a => {
+  const matched = articles.filter(a => {
     if (!a.publishedAt) return false;
     const aDate = new Date(a.publishedAt);
     if (isNaN(aDate.getTime())) return false;
     const aDateBstStr = new Date(aDate.getTime() + bstOffset).toISOString().slice(0, 10);
     return aDateBstStr === bstTodayStr || aDate >= twentyFourHoursAgo;
   }).length;
+
+  return Math.max(matched, sessionStoriesPublishedToday, cachedBloggerCountToday);
 }
 
 /**
@@ -823,7 +884,8 @@ app.get(['/rss', '/feed.xml'], (req, res) => {
 // OPERATIONAL & API ENDPOINTS
 // -------------------------------------------------------------
 
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  await syncBloggerStoriesToday();
   const articles = loadArticles();
   const originality = calculateOriginalityRatio(articles);
   console.log(`[HEALTH] Health check ping received at ${new Date().toISOString()}`);
@@ -855,10 +917,15 @@ app.get('/ping', (req, res) => {
 });
 
 app.get('/templates', (req, res) => {
-  res.json({
-    activeTemplate: currentActiveTemplate,
-    availableTemplates: getAvailableTemplates()
-  });
+  if (req.query.json === 'true' || (req.headers.accept && req.headers.accept.startsWith('application/json') && !req.headers.accept.includes('text/html'))) {
+    return res.json({
+      activeTemplate: currentActiveTemplate,
+      availableTemplates: getAvailableTemplates()
+    });
+  }
+  const html = renderTemplatesPage(currentActiveTemplate, getAvailableTemplates());
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
 });
 
 app.post('/template', (req, res) => {
@@ -920,13 +987,12 @@ app.get('/trigger/briefing', async (req, res) => {
   publishOriginalStory(type).catch(e => console.error(e));
 });
 
-app.get('/status', (req, res) => {
+app.get('/status', async (req, res) => {
+  await syncBloggerStoriesToday();
   const processed = loadProcessedUrls();
   const recentStories = loadRecentStories(RECENT_STORIES_FILE);
   const articles = loadArticles();
-  const cardsCount = fs.existsSync(CARDS_DIR)
-    ? fs.readdirSync(CARDS_DIR).filter(f => f.endsWith('.png')).length
-    : 0;
+  const cardsCount = getGeneratedCardsCount();
   const originality = calculateOriginalityRatio(articles);
 
   res.json({

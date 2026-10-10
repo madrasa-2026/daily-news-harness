@@ -5,6 +5,7 @@ config.production.json
 npm-debug.log
 .DS_Store
 scratch*.js
+scratch/
 .archive/
 *.png
 !portal/public/images/*.png

@@ -11,10 +11,17 @@ try {
   } catch {}
 }
 
+let Resvg = null;
+try {
+  Resvg = require('@resvg/resvg-js').Resvg;
+} catch {}
+
 const CARDS_DIR = path.join(__dirname, '..', 'public', 'cards');
 if (!fs.existsSync(CARDS_DIR)) {
   fs.mkdirSync(CARDS_DIR, { recursive: true });
 }
+
+let sessionCardsRendered = 0;
 
 function findChromeExecutable() {
   if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
@@ -24,8 +31,7 @@ function findChromeExecutable() {
     return process.env.CHROME_BIN;
   }
 
-
-  // 2. Search Render and Linux cache directories
+  // Search Render and Linux cache directories
   const homeDir = process.env.HOME || '/home/render';
   const cacheDirs = [
     '/opt/render/.cache/puppeteer',
@@ -57,6 +63,8 @@ function findChromeExecutable() {
   const paths = [
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
     process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Google\\Chrome\\Application\\chrome.exe') : '',
     '/usr/bin/google-chrome-stable',
     '/usr/bin/google-chrome',
@@ -114,7 +122,7 @@ function getHeadlineFontSize(len) {
 // -------------------------------------------------------------
 
 // 1. Bold Headline (Al Jazeera / Crimson Red Style)
-function templateBoldHeadline({ headline, subtext, category, source, dateStr, fontSize }) {
+function templateBoldHeadline({ headline, subtext, category, source, dateStr, fontSize, showCommentPointer = true }) {
   return `<!DOCTYPE html>
 <html lang="bn">
 <head>
@@ -139,6 +147,12 @@ function templateBoldHeadline({ headline, subtext, category, source, dateStr, fo
       font-size: 24px; font-weight: 500; line-height: 1.35; color: #f1f5f9;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
+    .comment-pointer-strip {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #fef08a; color: #991b1b; padding: 7px 22px; border-radius: 20px;
+      font-weight: 800; font-size: 21px; width: fit-content;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25); margin-top: 14px;
+    }
     .bottom-strip { display: flex; justify-content: space-between; align-items: center; border-top: 2px solid rgba(255, 255, 255, 0.2); padding-top: 18px; }
     .brand-bug { display: flex; align-items: center; gap: 14px; }
     .bug-icon { width: 44px; height: 44px; background: #ffffff; color: #d61f2c; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 900; }
@@ -152,6 +166,7 @@ function templateBoldHeadline({ headline, subtext, category, source, dateStr, fo
   <div class="content-area">
     <h1 class="headline">${headline}</h1>
     ${subtext ? `<p class="subtext">${subtext}</p>` : ''}
+    ${showCommentPointer ? `<div class="comment-pointer-strip"><span>📰</span><span>বিস্তারিত খবর কমেন্ট বক্সে 👇</span></div>` : ''}
   </div>
   <div class="bottom-strip">
     <div class="brand-bug"><div class="bug-icon">জ</div><div><div class="brand-title">জনবার্তা</div><div class="brand-slogan">JONOBARTA • সত্য ও ন্যায়ের কণ্ঠ</div></div></div>
@@ -162,7 +177,7 @@ function templateBoldHeadline({ headline, subtext, category, source, dateStr, fo
 }
 
 // 2. Image Dominant (TV News Lower-Third / Somoy TV / BBC style)
-function templateImageDominant({ headline, subtext, category, source, dateStr, bgImage, fontSize }) {
+function templateImageDominant({ headline, subtext, category, source, dateStr, bgImage, fontSize, showCommentPointer = true }) {
   const bg = bgImage || 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80';
   return `<!DOCTYPE html>
 <html lang="bn">
@@ -181,8 +196,8 @@ function templateImageDominant({ headline, subtext, category, source, dateStr, b
       filter: brightness(0.85);
     }
     .gradient-overlay {
-      position: absolute; bottom: 0; left: 0; right: 0; height: 380px;
-      background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 60%, transparent 100%);
+      position: absolute; bottom: 0; left: 0; right: 0; height: 420px;
+      background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.75) 60%, transparent 100%);
     }
     .top-badge {
       position: absolute; top: 40px; left: 80px; z-index: 10;
@@ -190,12 +205,18 @@ function templateImageDominant({ headline, subtext, category, source, dateStr, b
       font-size: 22px; font-weight: 800; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
     .lower-third {
-      position: relative; z-index: 10; padding: 0 80px 45px 80px;
+      position: relative; z-index: 10; padding: 0 80px 40px 80px;
     }
     .headline {
       font-family: 'Noto Serif Bengali', serif; font-size: ${Math.min(fontSize, 48)}px;
       font-weight: 900; line-height: 1.25; color: #ffffff; text-shadow: 0 2px 8px rgba(0,0,0,0.8);
-      margin-bottom: 15px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+      margin-bottom: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .comment-pointer-strip {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(220, 38, 38, 0.95); color: #ffffff; padding: 6px 18px; border-radius: 20px;
+      font-weight: 800; font-size: 19px; width: fit-content; border: 1px solid #fecaca;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4); margin-bottom: 12px;
     }
     .bottom-bar {
       display: flex; justify-content: space-between; align-items: center;
@@ -212,6 +233,7 @@ function templateImageDominant({ headline, subtext, category, source, dateStr, b
   <div class="top-badge">${category}</div>
   <div class="lower-third">
     <h1 class="headline">${headline}</h1>
+    ${showCommentPointer ? `<div class="comment-pointer-strip"><span>📰</span><span>বিস্তারিত খবর কমেন্ট বক্সে 👇</span></div>` : ''}
     <div class="bottom-bar">
       <div class="brand-tag">জনবার্তা • সত্যের সন্ধান</div>
       <div class="meta-tag">সূত্র: ${source} • ${dateStr}</div>
@@ -222,7 +244,7 @@ function templateImageDominant({ headline, subtext, category, source, dateStr, b
 }
 
 // 3. Minimal Editorial (Clean Light Style)
-function templateMinimal({ headline, subtext, category, source, dateStr, fontSize }) {
+function templateMinimal({ headline, subtext, category, source, dateStr, fontSize, showCommentPointer = true }) {
   return `<!DOCTYPE html>
 <html lang="bn">
 <head>
@@ -232,20 +254,26 @@ function templateMinimal({ headline, subtext, category, source, dateStr, fontSiz
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Hind Siliguri', sans-serif; }
     body {
       width: 1200px; height: 630px; background-color: #f8fafc; color: #0f172a;
-      padding: 50px 80px 45px 80px; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden;
+      padding: 45px 80px 40px 80px; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden;
       border: 12px solid #e2e8f0;
     }
-    .top-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #cbd5e1; padding-bottom: 18px; }
+    .top-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #cbd5e1; padding-bottom: 16px; }
     .brand-logo { font-size: 28px; font-weight: 900; color: #d61f2c; }
     .cat-pill { font-size: 20px; font-weight: 700; color: #475569; text-transform: uppercase; }
     .center-body { flex: 1; display: flex; flex-direction: column; justify-content: center; }
     .headline {
       font-family: 'Noto Serif Bengali', serif; font-size: ${fontSize}px; font-weight: 900; line-height: 1.25;
-      color: #0f172a; margin-bottom: 16px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+      color: #0f172a; margin-bottom: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
     .subtext {
       font-size: 24px; font-weight: 500; line-height: 1.35; color: #64748b;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .comment-pointer-strip {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #fee2e2; color: #b91c1c; padding: 6px 18px; border-radius: 20px;
+      font-weight: 800; font-size: 19px; width: fit-content; border: 1px solid #fca5a5;
+      margin-top: 14px;
     }
     .footer-row { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #cbd5e1; padding-top: 16px; font-size: 18px; color: #64748b; font-weight: 600; }
   </style>
@@ -258,6 +286,7 @@ function templateMinimal({ headline, subtext, category, source, dateStr, fontSiz
   <div class="center-body">
     <h1 class="headline">${headline}</h1>
     ${subtext ? `<p class="subtext">${subtext}</p>` : ''}
+    ${showCommentPointer ? `<div class="comment-pointer-strip"><span>📰</span><span>বিস্তারিত খবর কমেন্ট বক্সে 👇</span></div>` : ''}
   </div>
   <div class="footer-row">
     <div>তথ্যসূত্র: ${source}</div>
@@ -268,7 +297,7 @@ function templateMinimal({ headline, subtext, category, source, dateStr, fontSiz
 }
 
 // 4. Breaking News (Urgent Flash / Urgent Red & Yellow Style)
-function templateBreaking({ headline, subtext, category, source, dateStr, fontSize }) {
+function templateBreaking({ headline, subtext, category, source, dateStr, fontSize, showCommentPointer = true }) {
   return `<!DOCTYPE html>
 <html lang="bn">
 <head>
@@ -295,6 +324,11 @@ function templateBreaking({ headline, subtext, category, source, dateStr, fontSi
       font-size: 24px; color: #cbd5e1; line-height: 1.35;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
+    .comment-pointer-strip {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #eab308; color: #451a03; padding: 6px 18px; border-radius: 20px;
+      font-weight: 900; font-size: 20px; width: fit-content; margin-top: 14px;
+    }
     .bottom-bar {
       display: flex; justify-content: space-between; align-items: center;
       border-top: 2px solid #334155; padding-top: 16px; font-size: 19px; color: #94a3b8; font-weight: 600;
@@ -310,6 +344,7 @@ function templateBreaking({ headline, subtext, category, source, dateStr, fontSi
   <div>
     <h1 class="main-headline">${headline}</h1>
     ${subtext ? `<p class="subtext">${subtext}</p>` : ''}
+    ${showCommentPointer ? `<div class="comment-pointer-strip"><span>🚨</span><span>বিস্তারিত খবর কমেন্ট বক্সে 👇</span></div>` : ''}
   </div>
   <div class="bottom-bar">
     <div class="logo">জনবার্তা সংবাদ নেটওয়ার্ক</div>
@@ -320,7 +355,7 @@ function templateBreaking({ headline, subtext, category, source, dateStr, fontSi
 }
 
 // 5. Quote Style (Editorial Statements & Quotations)
-function templateQuote({ headline, subtext, category, source, dateStr, fontSize }) {
+function templateQuote({ headline, subtext, category, source, dateStr, fontSize, showCommentPointer = true }) {
   return `<!DOCTYPE html>
 <html lang="bn">
 <head>
@@ -344,6 +379,12 @@ function templateQuote({ headline, subtext, category, source, dateStr, fontSize 
       font-size: 24px; color: #cbd5e1; font-weight: 500;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
+    .comment-pointer-strip {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(225, 29, 72, 0.2); color: #fda4af; padding: 6px 18px; border-radius: 20px;
+      font-weight: 800; font-size: 19px; width: fit-content; border: 1px solid #e11d48;
+      margin-top: 14px;
+    }
     .bottom-strip {
       display: flex; justify-content: space-between; align-items: center;
       border-top: 1px solid #3f3f46; padding-top: 16px; font-size: 19px; color: #a1a1aa; font-weight: 600;
@@ -358,6 +399,7 @@ function templateQuote({ headline, subtext, category, source, dateStr, fontSize 
   <div>
     <h1 class="headline">“${headline}”</h1>
     ${subtext ? `<p class="subtext">${subtext}</p>` : ''}
+    ${showCommentPointer ? `<div class="comment-pointer-strip"><span>💬</span><span>বিস্তারিত খবর কমেন্ট বক্সে 👇</span></div>` : ''}
   </div>
   <div class="bottom-strip">
     <div>জনবার্তা • বিশিষ্ট মতামত</div>
@@ -368,7 +410,7 @@ function templateQuote({ headline, subtext, category, source, dateStr, fontSize 
 }
 
 // 6. Dark Premium (Obsidian & Gold Accents)
-function templateDarkPremium({ headline, subtext, category, source, dateStr, fontSize }) {
+function templateDarkPremium({ headline, subtext, category, source, dateStr, fontSize, showCommentPointer = true }) {
   return `<!DOCTYPE html>
 <html lang="bn">
 <head>
@@ -392,6 +434,12 @@ function templateDarkPremium({ headline, subtext, category, source, dateStr, fon
       font-size: 24px; color: #9ca3af; font-weight: 500;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
     }
+    .comment-pointer-strip {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(245, 158, 11, 0.15); color: #fbbf24; padding: 6px 18px; border-radius: 20px;
+      font-weight: 800; font-size: 19px; width: fit-content; border: 1px solid #f59e0b;
+      margin-top: 14px;
+    }
     .footer-bar { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #1f2937; padding-top: 16px; font-size: 18px; color: #9ca3af; font-weight: 600; }
   </style>
 </head>
@@ -403,6 +451,7 @@ function templateDarkPremium({ headline, subtext, category, source, dateStr, fon
   <div>
     <h1 class="headline">${headline}</h1>
     ${subtext ? `<p class="subtext">${subtext}</p>` : ''}
+    ${showCommentPointer ? `<div class="comment-pointer-strip"><span>📰</span><span>বিস্তারিত খবর কমেন্ট বক্সে 👇</span></div>` : ''}
   </div>
   <div class="footer-bar">
     <div>JONOBARTA EXCLUSIVE</div>
@@ -424,57 +473,111 @@ const TEMPLATE_BUILDERS = {
 };
 
 function getTemplateHtml(templateId, data) {
-  // Check if template exists in /templates directory (either <id>/template.html or <id>.html)
-  const dirTemplateHtml = path.join(TEMPLATES_DIR, templateId, 'template.html');
-  const fileTemplateHtml = path.join(TEMPLATES_DIR, `${templateId}.html`);
-  let templateHtml = null;
-
-  if (fs.existsSync(dirTemplateHtml)) {
-    templateHtml = fs.readFileSync(dirTemplateHtml, 'utf8');
-  } else if (fs.existsSync(fileTemplateHtml)) {
-    templateHtml = fs.readFileSync(fileTemplateHtml, 'utf8');
-  }
-
-  if (templateHtml) {
-    return templateHtml
-      .replace(/\{\{headline\}\}/g, data.headline || '')
-      .replace(/\{\{subtext\}\}/g, data.subtext || '')
-      .replace(/\{\{category\}\}/g, data.category || '')
-      .replace(/\{\{source\}\}/g, data.source || '')
-      .replace(/\{\{dateStr\}\}/g, data.dateStr || '')
-      .replace(/\{\{bgImage\}\}/g, data.bgImage || '')
-      .replace(/\{\{fontSize\}\}/g, String(data.fontSize || 48));
-  }
-
-  // Fallback to built-in JS builder
   const builder = TEMPLATE_BUILDERS[templateId] || templateBoldHeadline;
   return builder(data);
 }
 
 function getAvailableTemplates() {
   const templates = {};
-  // 1. Built-in builders
   for (const id of Object.keys(TEMPLATE_BUILDERS)) {
     templates[id] = { id, source: 'builtin' };
   }
-  // 2. Scan /templates directory
-  if (fs.existsSync(TEMPLATES_DIR)) {
-    const entries = fs.readdirSync(TEMPLATES_DIR, { withFileTypes: true });
-    for (const ent of entries) {
-      if (ent.isDirectory()) {
-        const jsonPath = path.join(TEMPLATES_DIR, ent.name, 'template.json');
-        if (fs.existsSync(jsonPath)) {
-          try {
-            const meta = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-            templates[ent.name] = { ...meta, id: ent.name, source: 'custom_dir' };
-          } catch {}
-        } else {
-          templates[ent.name] = { id: ent.name, source: 'custom_dir' };
-        }
-      }
-    }
-  }
   return templates;
+}
+
+/**
+ * Upload image to Catbox CDN with timeout so image URL is immediately public
+ */
+async function uploadToCdn(imagePath) {
+  try {
+    const fileBuffer = fs.readFileSync(imagePath);
+    const blob = new Blob([fileBuffer]);
+    const fd = new FormData();
+    fd.append('reqtype', 'fileupload');
+    fd.append('fileToUpload', blob, path.basename(imagePath));
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4500);
+    const res = await fetch('https://catbox.moe/user/api.php', {
+      method: 'POST',
+      body: fd,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    const url = (await res.text()).trim();
+    if (url.startsWith('http')) {
+      console.log(`[CARD] Uploaded to CDN: ${url}`);
+      return url;
+    }
+  } catch (e) {
+    console.warn(`[CARD] CDN upload notice: ${e.message}`);
+  }
+  return null;
+}
+
+/**
+ * High-quality SVG generator for Resvg zero-dependency fallback rendering
+ */
+function buildSvgCard({ headline, subtext, category, source, dateStr, templateId = 'bold-headline', showCommentPointer = true }) {
+  const cleanHeadline = (headline || '').replace(/[&<>]/g, '').trim();
+  const cleanSubtext = (subtext || '').replace(/[&<>]/g, '').trim();
+  const cleanCategory = (category || 'জাতীয়').trim();
+
+  let bgColor = '#d61f2c';
+  let bannerColor = '#a3121f';
+  let headlineColor = '#ffffff';
+  let subColor = '#f1f5f9';
+  let badgeText = cleanCategory;
+
+  if (templateId === 'breaking-news') {
+    bgColor = '#0f172a';
+    bannerColor = '#dc2626';
+    badgeText = '🚨 ব্রেকিং নিউজ • ' + cleanCategory;
+  } else if (templateId === 'minimal') {
+    bgColor = '#f8fafc';
+    bannerColor = '#e2e8f0';
+    headlineColor = '#0f172a';
+    subColor = '#475569';
+  } else if (templateId === 'dark-premium') {
+    bgColor = '#0b0f19';
+    bannerColor = '#1f2937';
+    headlineColor = '#ffffff';
+    subColor = '#9ca3af';
+  } else if (templateId === 'quote-style') {
+    bgColor = '#1e1e24';
+    bannerColor = '#e11d48';
+    badgeText = 'বিশেষ বক্তব্য • ' + cleanCategory;
+  }
+
+  return `<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="${bgColor}"/>
+  ${templateId === 'dark-premium' ? '<rect x="10" y="10" width="1180" height="610" fill="none" stroke="#f59e0b" stroke-width="4"/>' : ''}
+  ${templateId === 'minimal' ? '<rect x="10" y="10" width="1180" height="610" fill="none" stroke="#cbd5e1" stroke-width="12"/>' : ''}
+  ${templateId === 'quote-style' ? '<rect x="0" y="0" width="16" height="630" fill="#e11d48"/>' : ''}
+  
+  <!-- Category / Header banner -->
+  <rect x="80" y="45" width="280" height="42" rx="4" fill="${bannerColor}"/>
+  <text x="100" y="73" font-size="20" font-family="'Hind Siliguri', 'Noto Serif Bengali', sans-serif" font-weight="bold" fill="#ffffff">${badgeText}</text>
+  
+  <!-- Headline -->
+  <text x="80" y="240" font-size="48" font-family="'Noto Serif Bengali', 'Hind Siliguri', serif" font-weight="bold" fill="${headlineColor}">
+    ${cleanHeadline.slice(0, 48)}
+  </text>
+  ${cleanHeadline.length > 48 ? `<text x="80" y="300" font-size="48" font-family="'Noto Serif Bengali', 'Hind Siliguri', serif" font-weight="bold" fill="${headlineColor}">${cleanHeadline.slice(48, 96)}</text>` : ''}
+  
+  <!-- Subtext -->
+  ${cleanSubtext ? `<text x="80" y="${cleanHeadline.length > 48 ? 360 : 310}" font-size="24" font-family="'Hind Siliguri', sans-serif" fill="${subColor}">${cleanSubtext.slice(0, 65)}...</text>` : ''}
+  
+  <!-- Comment pointer strip -->
+  ${showCommentPointer ? `
+  <rect x="80" y="465" width="320" height="48" rx="24" fill="#fef08a"/>
+  <text x="110" y="497" font-size="21" font-family="'Hind Siliguri', sans-serif" font-weight="bold" fill="#991b1b">📰 বিস্তারিত খবর কমেন্ট বক্সে 👇</text>
+  ` : ''}
+  
+  <!-- Bottom line & brand -->
+  <line x1="80" y1="545" x2="1120" y2="545" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>
+  <text x="80" y="585" font-size="24" font-family="'Noto Serif Bengali', sans-serif" font-weight="bold" fill="${headlineColor}">জনবার্তা (Jonobarta)</text>
+  <text x="780" y="585" font-size="18" font-family="'Hind Siliguri', sans-serif" fill="${subColor}">সূত্র: ${source} • ${dateStr}</text>
+</svg>`;
 }
 
 /**
@@ -486,7 +589,8 @@ async function renderNewsCard({
   source = 'জনবার্তা ডেস্ক',
   category = null,
   imageUrl = null,
-  templateId = null
+  templateId = null,
+  showCommentPointer = true
 }) {
   const activeTemplate = templateId || process.env.ACTIVE_CARD_TEMPLATE || 'bold-headline';
 
@@ -496,23 +600,27 @@ async function renderNewsCard({
   const dateStr = formatBengaliDate(new Date());
   const fontSize = getHeadlineFontSize(cleanHeadline.length);
 
-  const html = getTemplateHtml(activeTemplate, {
-    headline: cleanHeadline,
-    subtext: cleanSubtext,
-    category: cleanCat,
-    source,
-    dateStr,
-    bgImage: imageUrl,
-    fontSize
-  });
-
   const cardId = crypto.randomBytes(8).toString('hex');
   const outputPath = path.join(CARDS_DIR, `card_${cardId}.png`);
   const defaultCardPath = path.join(__dirname, '..', 'portal', 'public', 'images', 'jonobarta_card_default.png');
 
+  let renderSuccess = false;
+
+  // 1. Try Headless Chrome Puppeteer rendering
   const chromePath = findChromeExecutable();
   if (chromePath && puppeteer) {
     try {
+      const html = getTemplateHtml(activeTemplate, {
+        headline: cleanHeadline,
+        subtext: cleanSubtext,
+        category: cleanCat,
+        source,
+        dateStr,
+        bgImage: imageUrl,
+        fontSize,
+        showCommentPointer
+      });
+
       const browser = await puppeteer.launch({
         executablePath: chromePath,
         headless: true,
@@ -524,39 +632,69 @@ async function renderNewsCard({
         await page.setViewport({ width: 1200, height: 630, deviceScaleFactor: 2 });
         await page.setContent(html, { waitUntil: 'networkidle0', timeout: 15000 });
         await page.screenshot({ path: outputPath, type: 'png' });
-        console.log(`[CARD-ENGINE] Rendered custom card [${activeTemplate}]: ${outputPath}`);
-
-        return {
-          cardId,
-          templateId: activeTemplate,
-          filename: `card_${cardId}.png`,
-          relativeUrl: `/cards/card_${cardId}.png`,
-          fullPath: outputPath
-        };
+        console.log(`[CARD-ENGINE] Rendered custom card via Chrome [${activeTemplate}]: ${outputPath}`);
+        renderSuccess = true;
       } finally {
         await browser.close().catch(() => {});
       }
     } catch (renderErr) {
-      console.warn(`[CARD-ENGINE] Chrome rendering encountered error: ${renderErr.message}. Utilizing verified fallback card.`);
+      console.warn(`[CARD-ENGINE] Chrome rendering encountered error: ${renderErr.message}. Trying Resvg.`);
     }
-  } else {
-    console.log(`[CARD-ENGINE] Headless Chrome not present in environment. Generating card from verified template asset.`);
   }
 
-  // Graceful verified fallback: copy default 1200x630 card asset so card file ALWAYS exists
-  if (fs.existsSync(defaultCardPath)) {
-    fs.copyFileSync(defaultCardPath, outputPath);
-    console.log(`[CARD-ENGINE] Saved verified 1200x630 card asset: ${outputPath}`);
-    return {
-      cardId,
-      templateId: activeTemplate,
-      filename: `card_${cardId}.png`,
-      relativeUrl: `/cards/card_${cardId}.png`,
-      fullPath: outputPath
-    };
+  // 2. If Chrome not available or failed, try Resvg SVG renderer (zero-dependency on Linux)
+  if (!renderSuccess && Resvg) {
+    try {
+      const svg = buildSvgCard({
+        headline: cleanHeadline,
+        subtext: cleanSubtext,
+        category: cleanCat,
+        source,
+        dateStr,
+        templateId: activeTemplate,
+        showCommentPointer
+      });
+      const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: 1200 } });
+      const pngData = resvg.render();
+      fs.writeFileSync(outputPath, pngData.asPng());
+      console.log(`[CARD-ENGINE] Rendered custom card via Resvg [${activeTemplate}]: ${outputPath}`);
+      renderSuccess = true;
+    } catch (resvgErr) {
+      console.warn(`[CARD-ENGINE] Resvg rendering encountered error: ${resvgErr.message}`);
+    }
   }
 
-  throw new Error('Could not render news card and no default card asset found');
+  // 3. Fallback to default card asset if both failed
+  if (!renderSuccess) {
+    if (fs.existsSync(defaultCardPath)) {
+      fs.copyFileSync(defaultCardPath, outputPath);
+      console.log(`[CARD-ENGINE] Copied verified fallback card asset: ${outputPath}`);
+      renderSuccess = true;
+    } else {
+      throw new Error('Could not render news card and no default asset found');
+    }
+  }
+
+  sessionCardsRendered++;
+
+  // 4. Upload to CDN for immediate public reachability
+  const cdnUrl = await uploadToCdn(outputPath);
+
+  return {
+    cardId,
+    templateId: activeTemplate,
+    filename: `card_${cardId}.png`,
+    relativeUrl: `/cards/card_${cardId}.png`,
+    cdnUrl,
+    fullPath: outputPath
+  };
+}
+
+function getGeneratedCardsCount() {
+  const onDisk = fs.existsSync(CARDS_DIR)
+    ? fs.readdirSync(CARDS_DIR).filter(f => f.endsWith('.png')).length
+    : 0;
+  return Math.max(onDisk, sessionCardsRendered);
 }
 
 module.exports = {
@@ -566,6 +704,9 @@ module.exports = {
   getTemplateHtml,
   detectCategory,
   formatBengaliDate,
+  uploadToCdn,
+  buildSvgCard,
+  getGeneratedCardsCount,
   CARDS_DIR,
   TEMPLATES_DIR
 };

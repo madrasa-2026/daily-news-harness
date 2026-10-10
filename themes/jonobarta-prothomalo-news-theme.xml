@@ -1,0 +1,1744 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html>
+<html b:css='false' b:defaultwidgetversion='2' b:layoutsVersion='3' b:responsive='true' expr:dir='data:blog.languageDirection' expr:lang='data:blog.locale' xmlns='http://www.w3.org/1999/xhtml' xmlns:b='http://www.google.com/2005/gml/b' xmlns:data='http://www.google.com/2005/gml/data' xmlns:expr='http://www.google.com/2005/gml/expr'>
+<head>
+  <meta charset='UTF-8'/>
+  <meta content='width=device-width, initial-scale=1.0, maximum-scale=5.0' name='viewport'/>
+  <title><b:if cond='data:view.isHomepage'><data:blog.title/> • সত্য, ন্যায় ও জনমানুষের নির্ভীক সংবাদমাধ্যম<b:else/><data:blog.pageName/> - <data:blog.title/></b:if></title>
+  
+  <b:include data='blog' name='all-head-content'/>
+
+  <!-- Canonical and Social Meta -->
+  <link expr:href='data:blog.canonicalUrl' rel='canonical'/>
+  <meta expr:content='data:blog.title' property='og:site_name'/>
+  <b:if cond='data:view.isPost'>
+    <meta content='article' property='og:type'/>
+    <meta expr:content='data:blog.pageName' property='og:title'/>
+    <b:if cond='data:blog.postImageUrl'>
+      <meta expr:content='data:blog.postImageUrl' property='og:image'/>
+    </b:if>
+  <b:else/>
+    <meta content='website' property='og:type'/>
+    <meta expr:content='data:blog.title' property='og:title'/>
+  </b:if>
+
+  <!-- Google Fonts: Hind Siliguri, Noto Serif Bengali, Noto Sans Bengali -->
+  <link href='https://fonts.googleapis.com' rel='preconnect'/>
+  <link crossorigin='anonymous' href='https://fonts.gstatic.com' rel='preconnect'/>
+  <link href='https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700;800&amp;family=Noto+Serif+Bengali:wght@600;700;800;900&amp;family=Noto+Sans+Bengali:wght@400;500;600;700&amp;display=swap' rel='stylesheet'/>
+
+  <b:template-skin>
+    <![CDATA[
+    ]]>
+  </b:template-skin>
+
+  <b:skin><![CDATA[
+    /* ==========================================================================
+       JONOBARTA (জনবার্তা) — PROTHOM ALO STYLE PROFESSIONAL BENGALI NEWS THEME
+       ========================================================================== */
+    :root {
+      --primary: #d61f2c;
+      --primary-dark: #a3121f;
+      --primary-light: #fef2f2;
+      --accent: #0a8a4b;
+      --ink: #141414;
+      --ink-light: #334155;
+      --paper: #ffffff;
+      --surface: #f8fafc;
+      --border: #e2e8f0;
+      --border-dark: #cbd5e1;
+      --muted: #64748b;
+      --font-ui: 'Hind Siliguri', 'SolaimanLipi', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-headline: 'Noto Serif Bengali', 'Hind Siliguri', serif;
+      --container-max: 1240px;
+      --radius: 6px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+      --shadow-lg: 0 10px 25px rgba(0,0,0,0.12);
+    }
+
+    /* Reset & Base Setup */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #f1f5f9;
+      color: var(--ink);
+      font-family: var(--font-ui);
+      font-size: 16px;
+      line-height: 1.6;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      font-feature-settings: "kern" 1, "liga" 1;
+      overflow-x: hidden;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+      transition: color 0.2s ease, opacity 0.2s ease;
+    }
+    a:hover {
+      color: var(--primary);
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .container {
+      width: 100%;
+      max-width: var(--container-max);
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+
+    /* --------------------------------------------------------------------------
+       1. TOP UTILITY STRIP
+       -------------------------------------------------------------------------- */
+    .top-utility-strip {
+      background-color: #ffffff;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--muted);
+      padding: 6px 0;
+    }
+    .utility-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .date-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 500;
+      color: #334155;
+    }
+    .date-badge svg {
+      width: 15px;
+      height: 15px;
+      color: var(--primary);
+    }
+    .utility-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .edition-label {
+      background: #f1f5f9;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      color: var(--primary-dark);
+      font-size: 12px;
+    }
+    .social-links {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .social-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      color: var(--muted);
+      transition: all 0.2s;
+    }
+    .social-icon:hover {
+      color: var(--primary);
+      transform: translateY(-1px);
+    }
+
+    /* --------------------------------------------------------------------------
+       2. STICKY MASTHEAD (Prothom Alo Style)
+       -------------------------------------------------------------------------- */
+    .site-header {
+      background: #ffffff;
+      border-bottom: 2px solid var(--primary);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow 0.2s ease;
+    }
+    .site-header.scrolled {
+      box-shadow: var(--shadow-md);
+    }
+    .masthead-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 72px;
+    }
+    .masthead-left, .masthead-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .menu-toggle-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 8px;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+    .menu-toggle-btn:hover {
+      background: #f1f5f9;
+      color: var(--primary);
+    }
+    .menu-toggle-btn svg {
+      width: 26px;
+      height: 26px;
+    }
+
+    /* Brand Logo Lockup */
+    .brand-logo-lockup {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+    .brand-icon-bug {
+      width: 44px;
+      height: 44px;
+      background: var(--primary);
+      color: #ffffff;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-headline);
+      font-size: 28px;
+      font-weight: 900;
+      box-shadow: 0 4px 10px rgba(214, 31, 44, 0.3);
+      flex-shrink: 0;
+    }
+    .brand-title-wrap {
+      display: flex;
+      flex-direction: column;
+    }
+    .brand-title-bn {
+      font-family: var(--font-headline);
+      font-size: 34px;
+      font-weight: 900;
+      color: var(--primary);
+      line-height: 1.1;
+      letter-spacing: -0.5px;
+    }
+    .brand-slogan-bn {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      letter-spacing: 0.5px;
+    }
+
+    /* Search Action */
+    .search-toggle-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 14px;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-family: var(--font-ui);
+      transition: all 0.2s;
+    }
+    .search-toggle-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    /* Main Desktop Navigation Bar */
+    .main-navigation-bar {
+      background: #ffffff;
+      border-bottom: 1px solid var(--border);
+      display: none;
+    }
+    @media (min-width: 992px) {
+      .main-navigation-bar {
+        display: block;
+      }
+    }
+    .nav-list {
+      display: flex;
+      list-style: none;
+      gap: 22px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .nav-list::-webkit-scrollbar {
+      display: none;
+    }
+    .nav-item a {
+      display: block;
+      padding: 10px 0;
+      font-weight: 700;
+      font-size: 15px;
+      color: #334155;
+      position: relative;
+      white-space: nowrap;
+    }
+    .nav-item a:hover, .nav-item.active a {
+      color: var(--primary);
+    }
+    .nav-item a::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      width: 0;
+      height: 2px;
+      background: var(--primary);
+      transition: width 0.2s;
+    }
+    .nav-item a:hover::after, .nav-item.active a::after {
+      width: 100%;
+    }
+
+    /* --------------------------------------------------------------------------
+       3. BREAKING NEWS TICKER
+       -------------------------------------------------------------------------- */
+    .breaking-ticker-wrap {
+      background: #ffffff;
+      border-bottom: 1px solid var(--border);
+      padding: 8px 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+    .ticker-inner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      overflow: hidden;
+    }
+    .ticker-badge {
+      background: var(--primary);
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 13px;
+      padding: 4px 12px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      text-transform: uppercase;
+    }
+    .ticker-pulse-dot {
+      width: 7px;
+      height: 7px;
+      background: #ffffff;
+      border-radius: 50%;
+      animation: pulseAnimation 1.5s infinite;
+    }
+    @keyframes pulseAnimation {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.3); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    .ticker-content {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      font-size: 15px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+    .ticker-marquee {
+      display: inline-block;
+      animation: tickerMarquee 28s linear infinite;
+    }
+    .ticker-marquee:hover {
+      animation-play-state: paused;
+    }
+    @keyframes tickerMarquee {
+      0% { transform: translateX(100%); }
+      100% { transform: translateX(-100%); }
+    }
+    .ticker-item {
+      display: inline-block;
+      margin-right: 32px;
+    }
+    .ticker-item a {
+      color: #1e293b;
+    }
+    .ticker-item a:hover {
+      color: var(--primary);
+    }
+
+    /* --------------------------------------------------------------------------
+       4. HOMEPAGE PORTAL LAYOUT
+       -------------------------------------------------------------------------- */
+    .portal-main-wrapper {
+      padding: 24px 0 40px 0;
+      background: #ffffff;
+      margin-top: 14px;
+      border-radius: 8px;
+      box-shadow: var(--shadow-sm);
+    }
+    .portal-grid-layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 28px;
+    }
+    @media (min-width: 992px) {
+      .portal-grid-layout {
+        grid-template-columns: 8fr 4fr;
+      }
+    }
+
+    /* Hero Story Card (Lead Story) */
+    .hero-lead-card {
+      position: relative;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #000000;
+      box-shadow: var(--shadow-md);
+      margin-bottom: 24px;
+    }
+    .hero-media-wrap {
+      position: relative;
+      width: 100%;
+      padding-top: 56.25%; /* 16:9 ratio */
+      overflow: hidden;
+    }
+    .hero-media-wrap img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.4s ease;
+    }
+    .hero-lead-card:hover .hero-media-wrap img {
+      transform: scale(1.03);
+    }
+    .hero-gradient-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 75%;
+      background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.65) 50%, transparent 100%);
+      pointer-events: none;
+    }
+    .hero-content-overlay {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 24px;
+      color: #ffffff;
+      z-index: 2;
+    }
+    .hero-category-tag {
+      background: var(--primary);
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+    }
+    .hero-headline {
+      font-family: var(--font-headline);
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1.35;
+      color: #ffffff;
+      margin-bottom: 10px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+    }
+    @media (min-width: 768px) {
+      .hero-headline {
+        font-size: 32px;
+      }
+    }
+    .hero-meta {
+      font-size: 13px;
+      color: #cbd5e1;
+      font-weight: 500;
+    }
+
+    /* Sub-lead Story Grid (3 cards per row) */
+    .sublead-story-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+    @media (min-width: 640px) {
+      .sublead-story-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (min-width: 768px) {
+      .sublead-story-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    .story-card {
+      display: flex;
+      flex-direction: column;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      transition: all 0.2s ease;
+    }
+    .story-card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+      border-color: #cbd5e1;
+    }
+    .story-card-thumb {
+      position: relative;
+      width: 100%;
+      padding-top: 56.25%; /* 16:9 */
+      overflow: hidden;
+      background: #f1f5f9;
+    }
+    .story-card-thumb img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.3s ease;
+    }
+    .story-card:hover .story-card-thumb img {
+      transform: scale(1.04);
+    }
+    .story-card-body {
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      justify-content: space-between;
+    }
+    .story-card-category {
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .story-card-title {
+      font-family: var(--font-headline);
+      font-size: 17px;
+      font-weight: 700;
+      line-height: 1.45;
+      color: var(--ink);
+      margin-bottom: 10px;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .story-card-time {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    /* --------------------------------------------------------------------------
+       5. CATEGORY SECTIONS (জাতীয়, রাজনীতি, অর্থনীতি, আন্তর্জাতিক)
+       -------------------------------------------------------------------------- */
+    .category-section-block {
+      margin-bottom: 36px;
+      padding-top: 18px;
+      border-top: 2px solid var(--border);
+    }
+    .section-header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      position: relative;
+    }
+    .section-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-accent-line {
+      width: 5px;
+      height: 24px;
+      background: var(--primary);
+      border-radius: 2px;
+    }
+    .section-title {
+      font-family: var(--font-headline);
+      font-size: 22px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .section-view-more {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .section-view-more:hover {
+      color: var(--primary-dark);
+      text-decoration: underline;
+    }
+
+    .category-stories-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    @media (min-width: 640px) {
+      .category-stories-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (min-width: 768px) {
+      .category-stories-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    /* --------------------------------------------------------------------------
+       6. DESKTOP SIDEBAR ("সর্বাধিক পঠিত" & Facebook Embed)
+       -------------------------------------------------------------------------- */
+    .portal-sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .sidebar-widget-card {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+    }
+    .widget-heading-box {
+      border-bottom: 2px solid var(--primary);
+      padding-bottom: 8px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .widget-heading {
+      font-family: var(--font-headline);
+      font-size: 18px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    /* Trending Most-Read List */
+    .trending-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .trending-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding-bottom: 14px;
+      border-bottom: 1px dashed var(--border);
+    }
+    .trending-item:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    .trending-number {
+      font-family: var(--font-headline);
+      font-size: 24px;
+      font-weight: 900;
+      color: var(--primary);
+      line-height: 1;
+      width: 26px;
+      flex-shrink: 0;
+    }
+    .trending-title {
+      font-family: var(--font-headline);
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.4;
+      color: var(--ink);
+    }
+    .trending-title:hover {
+      color: var(--primary);
+    }
+
+    /* Facebook Page Plugin Widget */
+    .fb-widget-box {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .fb-widget-header {
+      background: #1877f2;
+      color: #ffffff;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .fb-widget-content {
+      padding: 16px;
+      text-align: center;
+    }
+    .fb-follow-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #1877f2;
+      color: #ffffff;
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+    .fb-follow-btn:hover {
+      background: #0e65d9;
+      color: #ffffff;
+    }
+
+    /* --------------------------------------------------------------------------
+       7. ARTICLE POST VIEW (Strict Automation Preservation)
+       -------------------------------------------------------------------------- */
+    .article-post-container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 24px 0 40px 0;
+    }
+    .article-breadcrumbs {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 14px;
+      font-weight: 500;
+    }
+    .article-category-pill {
+      background: var(--primary);
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 4px;
+      display: inline-block;
+      margin-bottom: 12px;
+    }
+    .article-main-title {
+      font-family: var(--font-headline);
+      font-size: 28px;
+      font-weight: 900;
+      line-height: 1.35;
+      color: #0f172a;
+      margin-bottom: 16px;
+    }
+    @media (min-width: 768px) {
+      .article-main-title {
+        font-size: 38px;
+      }
+    }
+    .article-meta-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .author-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      color: #334155;
+    }
+
+    /* Post Content Body */
+    .article-entry-body {
+      font-family: 'SolaimanLipi', 'Hind Siliguri', Arial, sans-serif;
+      font-size: 18px;
+      line-height: 1.85;
+      color: #1e293b;
+    }
+    .article-entry-body p {
+      margin-bottom: 18px;
+      text-align: justify;
+    }
+    .article-entry-body img {
+      margin: 16px auto 24px auto;
+      border-radius: 8px;
+      box-shadow: var(--shadow-md);
+      max-width: 100%;
+    }
+
+    /* Tags */
+    .article-tags-wrap {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .tag-chip {
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 20px;
+      transition: all 0.2s;
+    }
+    .tag-chip:hover {
+      background: var(--primary);
+      color: #ffffff;
+    }
+
+    /* --------------------------------------------------------------------------
+       8. MODERN FOOTER
+       -------------------------------------------------------------------------- */
+    .site-footer {
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 48px 0 24px 0;
+      margin-top: 48px;
+    }
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 32px;
+      margin-bottom: 36px;
+    }
+    @media (min-width: 768px) {
+      .footer-grid {
+        grid-template-columns: 2fr 1fr 1fr;
+      }
+    }
+    .footer-brand-title {
+      font-family: var(--font-headline);
+      font-size: 32px;
+      font-weight: 900;
+      color: #ef4444;
+      margin-bottom: 10px;
+    }
+    .footer-desc {
+      font-size: 14px;
+      color: #94a3b8;
+      line-height: 1.7;
+      margin-bottom: 18px;
+    }
+    .footer-col-title {
+      font-family: var(--font-headline);
+      font-size: 18px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 16px;
+      position: relative;
+      padding-bottom: 8px;
+    }
+    .footer-col-title::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 28px;
+      height: 2px;
+      background: var(--primary);
+    }
+    .footer-links-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 14px;
+      color: #cbd5e1;
+    }
+    .footer-links-list a:hover {
+      color: #ef4444;
+    }
+    .footer-bottom-bar {
+      border-top: 1px solid rgba(255,255,255,0.1);
+      padding-top: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: #94a3b8;
+      text-align: center;
+    }
+    @media (min-width: 768px) {
+      .footer-bottom-bar {
+        flex-direction: row;
+        justify-content: space-between;
+      }
+    }
+
+    /* --------------------------------------------------------------------------
+       9. OFF-CANVAS MOBILE DRAWER & SEARCH MODAL
+       -------------------------------------------------------------------------- */
+    .mobile-drawer-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 2000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+    .mobile-drawer-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+    .mobile-drawer {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 300px;
+      max-width: 85%;
+      height: 100%;
+      background: #ffffff;
+      z-index: 2001;
+      transform: translateX(-100%);
+      transition: transform 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 4px 0 20px rgba(0,0,0,0.2);
+    }
+    .mobile-drawer-overlay.active .mobile-drawer {
+      transform: translateX(0);
+    }
+    .drawer-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .drawer-close-btn {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--muted);
+      padding: 4px;
+    }
+    .drawer-nav-list {
+      list-style: none;
+      padding: 16px 0;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .drawer-nav-list li a {
+      display: block;
+      padding: 12px 24px;
+      font-weight: 700;
+      font-size: 16px;
+      color: #1e293b;
+      border-left: 3px solid transparent;
+    }
+    .drawer-nav-list li a:hover {
+      background: #f8fafc;
+      color: var(--primary);
+      border-left-color: var(--primary);
+    }
+
+    /* Hide Blogger Legacy Overlays and Default Elements */
+    .bg-photo-overlay, .bg-photo-container, .bg-photo, .centered-top-placeholder, .skip-navigation {
+      display: none !important;
+    }
+    .widget.Attribution {
+      display: none !important;
+    }
+  ]]></b:skin>
+</head>
+<body>
+
+  <!-- 1. Top Utility Strip -->
+  <div class='top-utility-strip'>
+    <div class='container utility-inner'>
+      <div class='date-badge'>
+        <svg fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><rect height='18' rx='2' width='18' x='3' y='4'/><line x1='16' x2='16' y1='2' y2='6'/><line x1='8' x2='8' y1='2' y2='6'/><line x1='3' x2='21' y1='10' y2='10'/></svg>
+        <span id='bengali-date-display'>শনিবার, ১০ অক্টোবর ২০২৬</span>
+      </div>
+      <div class='utility-right'>
+        <span class='edition-label'>বাংলাদেশ সংস্করণ</span>
+        <div class='social-links'>
+          <a class='social-icon' href='https://www.facebook.com/1113447921841506' rel='noopener' target='_blank' title='ফেসবুক'>
+            <svg fill='currentColor' height='16' viewBox='0 0 24 24' width='16'><path d='M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z'/></svg>
+          </a>
+          <a class='social-icon' href='https://www.youtube.com/@jonobarta' rel='noopener' target='_blank' title='ইউটিউব'>
+            <svg fill='currentColor' height='16' viewBox='0 0 24 24' width='16'><path d='M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z'/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Sticky Masthead -->
+  <header class='site-header' id='site-header'>
+    <div class='container masthead-inner'>
+      <div class='masthead-left'>
+        <button aria-label='মেনু খুলুন' class='menu-toggle-btn' id='menu-toggle-btn'>
+          <svg fill='none' stroke='currentColor' stroke-width='2.2' viewBox='0 0 24 24'><line x1='3' x2='21' y1='6' y2='6'/><line x1='3' x2='21' y1='12' y2='12'/><line x1='3' x2='21' y1='18' y2='18'/></svg>
+        </button>
+        <a class='brand-logo-lockup' href='/'>
+          <div class='brand-icon-bug'>জ</div>
+          <div class='brand-title-wrap'>
+            <span class='brand-title-bn'>জনবার্তা</span>
+            <span class='brand-slogan-bn'>JONOBARTA • সত্য ও ন্যায়ের কণ্ঠ</span>
+          </div>
+        </a>
+      </div>
+
+      <div class='masthead-right'>
+        <button class='search-toggle-btn' onclick='location.href="/search"'>
+          <svg fill='none' height='16' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24' width='16'><circle cx='11' cy='11' r='8'/><line x1='21' x2='16.65' y1='21' y2='16.65'/></svg>
+          <span>অনুসন্ধান</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Desktop Horizontal Nav -->
+    <nav class='main-navigation-bar'>
+      <div class='container'>
+        <ul class='nav-list'>
+          <li class='nav-item active'><a href='/'>প্রচ্ছদ</a></li>
+          <li class='nav-item'><a href='/search/label/জাতীয়'>জাতীয়</a></li>
+          <li class='nav-item'><a href='/search/label/রাজনীতি'>রাজনীতি</a></li>
+          <li class='nav-item'><a href='/search/label/অর্থনীতি'>অর্থনীতি</a></li>
+          <li class='nav-item'><a href='/search/label/আন্তর্জাতিক'>আন্তর্জাতিক</a></li>
+          <li class='nav-item'><a href='/search/label/বাংলাদেশ ব্যাংক'>ব্যাংকিং খাত</a></li>
+          <li class='nav-item'><a href='/search/label/বিজ্ঞান ও প্রযুক্তি'>বিজ্ঞান ও প্রযুক্তি</a></li>
+          <li class='nav-item'><a href='/search/label/মতামত'>মতামত</a></li>
+        </ul>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Off-Canvas Mobile Drawer -->
+  <div class='mobile-drawer-overlay' id='mobile-drawer-overlay'>
+    <div class='mobile-drawer'>
+      <div class='drawer-header'>
+        <div class='brand-title-bn' style='font-size: 26px;'>জনবার্তা</div>
+        <button class='drawer-close-btn' id='drawer-close-btn'>✕</button>
+      </div>
+      <ul class='drawer-nav-list'>
+        <li><a href='/'>🏠 প্রচ্ছদ</a></li>
+        <li><a href='/search/label/জাতীয়'>🔴 জাতীয়</a></li>
+        <li><a href='/search/label/রাজনীতি'>🏛️ রাজনীতি</a></li>
+        <li><a href='/search/label/অর্থনীতি'>📈 অর্থনীতি ও বাণিজ্য</a></li>
+        <li><a href='/search/label/আন্তর্জাতিক'>🌍 আন্তর্জাতিক</a></li>
+        <li><a href='/search/label/বাংলাদেশ ব্যাংক'>🏦 বাংলাদেশ ব্যাংক ও সংস্কার</a></li>
+        <li><a href='/search/label/বিজ্ঞান ও প্রযুক্তি'>💻 বিজ্ঞান ও প্রযুক্তি</a></li>
+        <li><a href='/search/label/মতামত'>✍️ মতামত ও সম্পাদকীয়</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 3. Breaking News Ticker -->
+  <div class='breaking-ticker-wrap'>
+    <div class='container ticker-inner'>
+      <div class='ticker-badge'>
+        <span class='ticker-pulse-dot'></span>
+        <span>ব্রেকিং</span>
+      </div>
+      <div class='ticker-content'>
+        <div class='ticker-marquee' id='ticker-marquee'>
+          <span class='ticker-item'>• বাংলাদেশ ব্যাংক চায় ৬০ হাজার কোটি টাকা সরকার থেকে লুটপাটের ক্ষতি পূরণে</span>
+          <span class='ticker-item'>• হাইকোর্টের রায়ে ফুলছড়ির স্কুলের কমিটি গঠন প্রক্রিয়া নিশ্চিত</span>
+          <span class='ticker-item'>• জনবার্তা: সত্য, ন্যায় ও জনমানুষের নির্ভীক ডিজিটাল সংবাদমাধ্যমের শুভযাত্রা</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Main Body Container with Blog1 Widget -->
+  <main class='container'>
+    <b:section class='main' id='main' name='Main' showaddelement='no'>
+      <b:widget id='Blog1' locked='true' title='Blog Posts' type='Blog' version='2' visible='true'>
+        <b:widget-settings>
+          <b:widget-setting name='showDateHeader'>true</b:widget-setting>
+          <b:widget-setting name='style.textcolor'>#ffffff</b:widget-setting>
+          <b:widget-setting name='showShareButtons'>true</b:widget-setting>
+          <b:widget-setting name='authorLabel'>By</b:widget-setting>
+          <b:widget-setting name='showCommentLink'>false</b:widget-setting>
+          <b:widget-setting name='showAuthor'>false</b:widget-setting>
+          <b:widget-setting name='postLabelsLabel'/>
+          <b:widget-setting name='showTimestamp'>true</b:widget-setting>
+          <b:widget-setting name='showReactions'>false</b:widget-setting>
+          <b:widget-setting name='showLocation'>false</b:widget-setting>
+        </b:widget-settings>
+        <b:includable id='main'>
+
+          <!-- HOMEPAGE and MULTI-POST VIEW -->
+          <b:if cond='data:view.isMultipleItems'>
+            <div class='portal-main-wrapper'>
+              <div class='portal-grid-layout'>
+
+                <!-- Left Primary Column (Hero + Grid + Categories) -->
+                <div class='portal-primary-col'>
+
+                  <!-- Hero Lead Story (Latest Post) -->
+                  <b:loop values='data:posts' var='heroPost' index='i'><b:if cond='data:i == 0'>
+                      <article class='hero-lead-card'>
+                        <a expr:href='data:heroPost.url'>
+                          <div class='hero-media-wrap'>
+                            <b:if cond='data:heroPost.featuredImage'>
+                              <img expr:alt='data:heroPost.title' expr:src='data:heroPost.featuredImage'/>
+                            <b:else/>
+                              <b:if cond='data:heroPost.firstImageUrl'>
+                                <img expr:alt='data:heroPost.title' expr:src='data:heroPost.firstImageUrl'/>
+                              <b:else/>
+                                <img alt='জনবার্তা সংবাদ' src='https://images.unsplash.com/photo-1585829365295-ab7cd400c167?auto=format&amp;fit=crop&amp;w=1200&amp;q=80'/>
+                              </b:if>
+                            </b:if>
+                            <div class='hero-gradient-overlay'></div>
+                            <div class='hero-content-overlay'>
+                              <b:if cond='data:heroPost.labels'>
+                                <span class='hero-category-tag'><b:loop values='data:heroPost.labels' var='lbl' index='l'><b:if cond='data:l == 0'><data:lbl.name/></b:if></b:loop></span>
+                              <b:else/>
+                                <span class='hero-category-tag'>জাতীয়</span>
+                              </b:if>
+                              <h1 class='hero-headline'><data:heroPost.title/></h1>
+                              <div class='hero-meta'>
+                                <span>জনবার্তা অনলাইন ডেস্ক</span> • <span class='relative-time' expr:data-timestamp='data:heroPost.timestamp'><data:heroPost.timestamp/></span>
+                              </div>
+                            </div>
+                          </div>
+                        </a>
+                      </article>
+                    </b:if></b:loop>
+
+                  <!-- Secondary Story Grid -->
+                  <div class='sublead-story-grid'>
+                    <b:loop index='i' values='data:posts' var='post'>
+                      <!-- Skip hero post in grid -->
+                      <b:if cond='data:i &gt; 0'>
+                        <article class='story-card'>
+                          <a class='story-card-thumb' expr:href='data:post.url'>
+                            <b:if cond='data:post.featuredImage'>
+                              <img expr:alt='data:post.title' expr:src='data:post.featuredImage'/>
+                            <b:else/>
+                              <b:if cond='data:post.firstImageUrl'>
+                                <img expr:alt='data:post.title' expr:src='data:post.firstImageUrl'/>
+                              <b:else/>
+                                <img alt='জনবার্তা' src='https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&amp;fit=crop&amp;w=600&amp;q=80'/>
+                              </b:if>
+                            </b:if>
+                          </a>
+                          <div class='story-card-body'>
+                            <b:if cond='data:post.labels'>
+                              <div class='story-card-category'><b:loop values='data:post.labels' var='lbl' index='l'><b:if cond='data:l == 0'><data:lbl.name/></b:if></b:loop></div>
+                            <b:else/>
+                              <div class='story-card-category'>সংবাদ</div>
+                            </b:if>
+                            <h2 class='story-card-title'>
+                              <a expr:href='data:post.url'><data:post.title/></a>
+                            </h2>
+                            <div class='story-card-time'>
+                              <span class='relative-time' expr:data-timestamp='data:post.timestamp'><data:post.timestamp/></span>
+                            </div>
+                          </div>
+                        </article>
+                      </b:if>
+                    </b:loop>
+                  </div>
+
+                  <!-- Category Section 1: জাতীয় -->
+                  <section class='category-section-block' id='cat-sec-national'>
+                    <div class='section-header-bar'>
+                      <div class='section-title-wrap'>
+                        <div class='section-accent-line'></div>
+                        <h2 class='section-title'>জাতীয়</h2>
+                      </div>
+                      <a class='section-view-more' href='/search/label/জাতীয়'>সব খবর ›</a>
+                    </div>
+                    <div class='category-stories-grid' id='grid-national'>
+                      <!-- Loaded via Label Feed -->
+                    </div>
+                  </section>
+
+                  <!-- Category Section 2: রাজনীতি -->
+                  <section class='category-section-block' id='cat-sec-politics'>
+                    <div class='section-header-bar'>
+                      <div class='section-title-wrap'>
+                        <div class='section-accent-line'></div>
+                        <h2 class='section-title'>রাজনীতি</h2>
+                      </div>
+                      <a class='section-view-more' href='/search/label/রাজনীতি'>সব খবর ›</a>
+                    </div>
+                    <div class='category-stories-grid' id='grid-politics'>
+                      <!-- Loaded via Label Feed -->
+                    </div>
+                  </section>
+
+                  <!-- Category Section 3: অর্থনীতি -->
+                  <section class='category-section-block' id='cat-sec-economy'>
+                    <div class='section-header-bar'>
+                      <div class='section-title-wrap'>
+                        <div class='section-accent-line'></div>
+                        <h2 class='section-title'>অর্থনীতি</h2>
+                      </div>
+                      <a class='section-view-more' href='/search/label/অর্থনীতি'>সব খবর ›</a>
+                    </div>
+                    <div class='category-stories-grid' id='grid-economy'>
+                      <!-- Loaded via Label Feed -->
+                    </div>
+                  </section>
+
+                  <!-- Category Section 4: আন্তর্জাতিক -->
+                  <section class='category-section-block' id='cat-sec-international'>
+                    <div class='section-header-bar'>
+                      <div class='section-title-wrap'>
+                        <div class='section-accent-line'></div>
+                        <h2 class='section-title'>আন্তর্জাতিক</h2>
+                      </div>
+                      <a class='section-view-more' href='/search/label/আন্তর্জাতিক'>সব খবর ›</a>
+                    </div>
+                    <div class='category-stories-grid' id='grid-international'>
+                      <!-- Loaded via Label Feed -->
+                    </div>
+                  </section>
+
+                </div>
+
+                <!-- Right Sidebar Column (Desktop) -->
+                <aside class='portal-sidebar'>
+
+                  <!-- Most Read Widget -->
+                  <div class='sidebar-widget-card'>
+                    <div class='widget-heading-box'>
+                      <h3 class='widget-heading'>সর্বাধিক পঠিত</h3>
+                    </div>
+                    <ul class='trending-list' id='trending-posts-list'>
+                      <b:loop index='idx' values='data:posts' var='p'>
+                        <b:if cond='data:idx &lt; 5'>
+                          <li class='trending-item'>
+                            <span class='trending-number'><b:eval expr='data:idx + 1'/></span>
+                            <a class='trending-title' expr:href='data:p.url'><data:p.title/></a>
+                          </li>
+                        </b:if>
+                      </b:loop>
+                    </ul>
+                  </div>
+
+                  <!-- Facebook Page Connect Widget -->
+                  <div class='fb-widget-box'>
+                    <div class='fb-widget-header'>
+                      <svg fill='currentColor' height='18' viewBox='0 0 24 24' width='18'><path d='M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z'/></svg>
+                      <span>ফেসবুকে জনবার্তা</span>
+                    </div>
+                    <div class='fb-widget-content'>
+                      <p style='font-size: 14px; color: #475569; margin-bottom: 12px; font-weight: 500;'>জনবার্তা অফিসিয়াল ফেসবুক পেজে যুক্ত থাকুন সবার আগে ব্রেকিং সংবাদ পেতে।</p>
+                      <a class='fb-follow-btn' href='https://www.facebook.com/1113447921841506' rel='noopener' target='_blank'>
+                        <span>অনুসরণ করুন (Follow)</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  <!-- Editorial Mission Widget -->
+                  <div class='sidebar-widget-card' style='background: #fff; border-left: 4px solid var(--primary);'>
+                    <h4 style='font-family: var(--font-headline); font-size: 16px; font-weight: 800; color: #0f172a; margin-bottom: 8px;'>জনবার্তা নীতিমালা</h4>
+                    <p style='font-size: 13px; color: #64748b; line-height: 1.7;'>আমরা সত্য ও নিরপেক্ষ সংবাদ পরিবেশনে অঙ্গীকারবদ্ধ। কোনো ব্যক্তি বা রাজনৈতিক চাপের মুখে আপস না করাই আমাদের সাংবাদিকতার মূল শক্তি।</p>
+                  </div>
+
+                </aside>
+
+              </div>
+            </div>
+
+          <!-- SINGLE ARTICLE VIEW -->
+          <b:else/>
+            <b:if cond='data:view.isPost'>
+              <b:loop values='data:posts' var='post'>
+                <article class='article-post-container'>
+                  <!-- Breadcrumbs -->
+                  <div class='article-breadcrumbs'>
+                    <a href='/'>প্রচ্ছদ</a>
+                    <span>›</span>
+                    <b:if cond='data:post.labels'>
+                      <a href='/'><b:loop values='data:post.labels' var='lbl' index='l'><b:if cond='data:l == 0'><data:lbl.name/></b:if></b:loop></a>
+                      <span>›</span>
+                    </b:if>
+                    <span>সংবাদ</span>
+                  </div>
+
+                  <!-- Category Tag -->
+                  <b:if cond='data:post.labels'>
+                    <div class='article-category-pill'><b:loop values='data:post.labels' var='lbl' index='l'><b:if cond='data:l == 0'><data:lbl.name/></b:if></b:loop></div>
+                  </b:if>
+
+                  <!-- Main Article Title -->
+                  <h1 class='article-main-title'><data:post.title/></h1>
+
+                  <!-- Meta Bar -->
+                  <div class='article-meta-bar'>
+                    <div class='author-info'>
+                      <span style='color: var(--primary);'>✍️</span>
+                      <span>জনবার্তা অনলাইন ডেস্ক</span>
+                    </div>
+                    <div class='date-info'>
+                      <span>প্রকাশ: </span><span class='relative-time' expr:data-timestamp='data:post.timestamp'><data:post.timestamp/></span>
+                    </div>
+                  </div>
+
+                  <!-- Post Body (Renders automation output: feature image, lead callout, paragraphs, and 📌 তথ্যসূত্র:) -->
+                  <div class='article-entry-body'>
+                    <data:post.body/>
+                  </div>
+
+                  <!-- Labels / Tags -->
+                  <b:if cond='data:post.labels'>
+                    <div class='article-tags-wrap'>
+                      <span style='font-weight: 700; font-size: 14px; color: #64748b;'>ট্যাগ:</span>
+                      <b:loop values='data:post.labels' var='label'>
+                        <a class='tag-chip' expr:href='data:label.url'>#<data:label.name/></a>
+                      </b:loop>
+                    </div>
+                  </b:if>
+                </article>
+              </b:loop>
+            </b:if>
+          </b:if>
+
+        </b:includable>
+      </b:widget>
+    </b:section>
+  </main>
+
+  <!-- 5. Modern Footer -->
+  <footer class='site-footer'>
+    <div class='container'>
+      <div class='footer-grid'>
+        <!-- Column 1: Brand Info -->
+        <div>
+          <div class='footer-brand-title'>জনবার্তা</div>
+          <p class='footer-desc'>জনবার্তা (Jonobarta) — সত্য, ন্যায় ও জনমানুষের নির্ভীক ডিজিটাল সংবাদমাধ্যম। বস্তুনিষ্ঠ সাংবাদিকতা ও তাৎক্ষণিক জাতীয় খবর পরিবেশনে আমরা সর্বদা সচেষ্ট।</p>
+          <div class='social-links' style='gap: 14px;'>
+            <a class='social-icon' href='https://www.facebook.com/1113447921841506' rel='noopener' style='background: rgba(255,255,255,0.1); color: #fff;' target='_blank'>
+              <svg fill='currentColor' height='14' viewBox='0 0 24 24' width='14'><path d='M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z'/></svg>
+            </a>
+            <a class='social-icon' href='https://www.youtube.com/@jonobarta' rel='noopener' style='background: rgba(255,255,255,0.1); color: #fff;' target='_blank'>
+              <svg fill='currentColor' height='14' viewBox='0 0 24 24' width='14'><path d='M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z'/></svg>
+            </a>
+          </div>
+        </div>
+
+        <!-- Column 2: Sections -->
+        <div>
+          <h4 class='footer-col-title'>বিভাগসমূহ</h4>
+          <ul class='footer-links-list'>
+            <li><a href='/search/label/জাতীয়'>জাতীয় সংবাদ</a></li>
+            <li><a href='/search/label/রাজনীতি'>রাজনৈতিক অঙ্গন</a></li>
+            <li><a href='/search/label/অর্থনীতি'>অর্থনীতি ও ব্যাংকিং</a></li>
+            <li><a href='/search/label/আন্তর্জাতিক'>আন্তর্জাতিক খবর</a></li>
+            <li><a href='/search/label/বিজ্ঞান ও প্রযুক্তি'>বিজ্ঞান ও প্রযুক্তি</a></li>
+          </ul>
+        </div>
+
+        <!-- Column 3: Contact and Info -->
+        <div>
+          <h4 class='footer-col-title'>যোগাযোগ ও কার্যালয়</h4>
+          <ul class='footer-links-list' style='font-size: 13px;'>
+            <li>সম্পাদক ও প্রকাশক: জনবার্তা সম্পাদকীয় বোর্ড</li>
+            <li>প্রধান কার্যালয়: ঢাকা, বাংলাদেশ</li>
+            <li>ইমেইল: news@jonobarta.com</li>
+            <li>ফোন: +৮৮০ ১৯১২-৩৪৫৬৭৮</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Copyright Bar -->
+      <div class='footer-bottom-bar'>
+        <div>© ২০২৬ <span style='color: #ef4444; font-weight: 700;'>জনবার্তা (Jonobarta)</span> • সর্বস্বত্ব সংরক্ষিত।</div>
+        <div>ডিজিটাল সংবাদ মাধ্যম • ঢাকা, বাংলাদেশ</div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ==========================================================================
+       CLIENT-SIDE SCRIPTS: BENGALI DATE, MOBILE MENU, CATEGORY FEEDS, RELATIVE TIME
+       ========================================================================== -->
+  <script type='text/javascript'>
+  //<![CDATA[
+  (function() {
+    // 1. Bengali Date Calculation for Utility Strip
+    const bengaliDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+    const bengaliDays = ['রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার', 'শনিবার'];
+    const bengaliMonths = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+
+    function toBnNum(num) {
+      return String(num).replace(/\d/g, d => bengaliDigits[parseInt(d, 10)]);
+    }
+
+    const now = new Date();
+    const dayName = bengaliDays[now.getDay()];
+    const dateNum = toBnNum(now.getDate());
+    const monthName = bengaliMonths[now.getMonth()];
+    const yearNum = toBnNum(now.getFullYear());
+
+    function getBengaliCalendarDate(date) {
+      const bnMonths = ['বৈশাখ', 'জ্যৈষ্ঠ', 'আষাঢ়', 'শ্রাবণ', 'ভাদ্র', 'আশ্বিন', 'কার্তিক', 'অগ্রহায়ণ', 'পৌষ', 'মাঘ', 'ফাল্গুন', 'চৈত্র'];
+      const m = date.getMonth();
+      const d = date.getDate();
+      const y = date.getFullYear();
+      const bYear = (m > 3 || (m === 3 && d >= 14)) ? y - 593 : y - 594;
+      const startOfBnYear = (m > 3 || (m === 3 && d >= 14)) ? new Date(y, 3, 14) : new Date(y - 1, 3, 14);
+      let diffDays = Math.floor((date - startOfBnYear) / 86400000);
+      const monthLengths = [31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 30, 30];
+      let bMonthIdx = 0;
+      let bDay = diffDays + 1;
+      for (let i = 0; i < monthLengths.length; i++) {
+        if (bDay <= monthLengths[i]) {
+          bMonthIdx = i;
+          break;
+        }
+        bDay -= monthLengths[i];
+      }
+      return `${toBnNum(bDay)} ${bnMonths[bMonthIdx]} ${toBnNum(bYear)} বঙ্গাব্দ`;
+    }
+
+    const dateElem = document.getElementById('bengali-date-display');
+    if (dateElem) {
+      dateElem.textContent = `${dayName}, ${dateNum} ${monthName} ${yearNum} | ${getBengaliCalendarDate(now)}`;
+    }
+
+    // 2. Mobile Drawer Navigation Toggle
+    const menuBtn = document.getElementById('menu-toggle-btn');
+    const drawerOverlay = document.getElementById('mobile-drawer-overlay');
+    const closeBtn = document.getElementById('drawer-close-btn');
+
+    if (menuBtn && drawerOverlay) {
+      menuBtn.addEventListener('click', () => drawerOverlay.classList.add('active'));
+    }
+    if (closeBtn && drawerOverlay) {
+      closeBtn.addEventListener('click', () => drawerOverlay.classList.remove('active'));
+    }
+    if (drawerOverlay) {
+      drawerOverlay.addEventListener('click', (e) => {
+        if (e.target === drawerOverlay) drawerOverlay.classList.remove('active');
+      });
+    }
+
+    // 3. Header Scroll Shadow Effect
+    const siteHeader = document.getElementById('site-header');
+    window.addEventListener('scroll', () => {
+      if (siteHeader) {
+        if (window.scrollY > 20) siteHeader.classList.add('scrolled');
+        else siteHeader.classList.remove('scrolled');
+      }
+    });
+
+    // 4. Format Relative Timestamps
+    function formatRelativeBengaliTime(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const diffSec = Math.floor((new Date() - d) / 1000);
+      if (diffSec < 60) return 'এইমাত্র';
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${toBnNum(diffMin)} মিনিট আগে`;
+      const diffHour = Math.floor(diffMin / 60);
+      if (diffHour < 24) return `${toBnNum(diffHour)} ঘণ্টা আগে`;
+      const diffDay = Math.floor(diffHour / 24);
+      if (diffDay < 7) return `${toBnNum(diffDay)} দিন আগে`;
+      return `${toBnNum(d.getDate())} ${bengaliMonths[d.getMonth()]} ${toBnNum(d.getFullYear())}`;
+    }
+
+    document.querySelectorAll('.relative-time').forEach(el => {
+      const ts = el.getAttribute('data-timestamp') || el.textContent;
+      el.textContent = formatRelativeBengaliTime(ts);
+    });
+
+    // 5. Dynamic Category Feed Loader (জাতীয়, রাজনীতি, অর্থনীতি, আন্তর্জাতিক)
+    function loadCategoryPosts(label, containerId) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      const script = document.createElement('script');
+      const callbackName = 'renderCat_' + Math.random().toString(36).substr(2, 8);
+      
+      window[callbackName] = function(json) {
+        try {
+          const entries = json.feed.entry || [];
+          if (!entries || entries.length === 0) {
+            container.innerHTML = `<div style="grid-column: 1/-1; padding: 14px; background: #f8fafc; border-radius: 6px; font-size: 14px; color: #64748b;">এই বিভাগে নতুন সংবাদ দ্রুত যুক্ত করা হচ্ছে।</div>`;
+            return;
+          }
+
+          let html = '';
+          entries.slice(0, 4).forEach(entry => {
+            const title = entry.title.$t;
+            const linkObj = entry.link.find(l => l.rel === 'alternate');
+            const link = linkObj ? linkObj.href : '#';
+            let thumb = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?auto=format&fit=crop&w=400&q=80';
+            
+            if (entry.media$thumbnail && entry.media$thumbnail.url) {
+              thumb = entry.media$thumbnail.url.replace('/s72-c/', '/w500-h280-p-k-no-nu/');
+            } else if (entry.content && entry.content.$t) {
+              const imgMatch = entry.content.$t.match(/<img[^>]+src=["']([^"']+)["']/i);
+              if (imgMatch) thumb = imgMatch[1];
+            }
+
+            const pubDate = entry.published ? formatRelativeBengaliTime(entry.published.$t) : '';
+
+            html += `
+              <article class="story-card">
+                <a href="${link}" class="story-card-thumb">
+                  <img src="${thumb}" alt="${title}" loading="lazy" />
+                </a>
+                <div class="story-card-body">
+                  <h3 class="story-card-title" style="font-size: 15px;">
+                    <a href="${link}">${title}</a>
+                  </h3>
+                  <div class="story-card-time">${pubDate}</div>
+                </div>
+              </article>
+            `;
+          });
+          container.innerHTML = html;
+        } catch (e) {
+          console.warn('Feed render error for ' + label, e);
+        }
+      };
+
+      script.src = `/feeds/posts/default/-/${encodeURIComponent(label)}?alt=json-in-script&max-results=4&callback=${callbackName}`;
+      document.body.appendChild(script);
+    }
+
+    // Initialize category loaders
+    loadCategoryPosts('জাতীয়', 'grid-national');
+    loadCategoryPosts('রাজনীতি', 'grid-politics');
+    loadCategoryPosts('অর্থনীতি', 'grid-economy');
+    loadCategoryPosts('আন্তর্জাতিক', 'grid-international');
+
+    // 6. Bengali Digits for Trending Numbers
+    function updateTrendingNumbers() {
+      document.querySelectorAll('.trending-number').forEach((el, index) => {
+        el.textContent = toBnNum(index + 1);
+      });
+    }
+    updateTrendingNumbers();
+
+    // 7. Dynamic Homepage & Ticker Feed Loader (guarantees content even if Blog1 widget is empty)
+    function populateHomepageFromFeed() {
+      const script = document.createElement('script');
+      window.onBlogFeedLoaded = function(json) {
+        try {
+          const entries = json.feed.entry || [];
+          if (!entries.length) return;
+
+          // A. Update Breaking Ticker with latest 5 headlines
+          const tickerMarquee = document.getElementById('ticker-marquee');
+          if (tickerMarquee) {
+            let tickerHtml = '';
+            entries.slice(0, 5).forEach(e => {
+              const title = e.title.$t;
+              const link = (e.link && e.link.find(function(l){return l.rel === 'alternate';}) ? e.link.find(function(l){return l.rel === 'alternate';}).href : '#');
+              tickerHtml += `<span class="ticker-item">• <a href="${link}">${title}</a></span>`;
+            });
+            tickerMarquee.innerHTML = tickerHtml;
+          }
+
+          // B. If homepage main section is empty, dynamically render full Prothom Alo portal!
+          const mainContainer = document.querySelector('main.container');
+          const heroLead = document.querySelector('.hero-lead-card');
+          const isHomeOrSearch = location.pathname === '/' || location.pathname === '' || location.pathname.indexOf('/search') !== -1;
+
+          if (isHomeOrSearch && mainContainer && (!heroLead || !(heroLead.querySelector('h1') ? heroLead.querySelector('h1').textContent.trim() : ''))) {
+            const hero = entries[0];
+            const heroTitle = hero.title.$t;
+            const heroLink = (hero.link && hero.link.find(function(l){return l.rel === 'alternate';}) ? hero.link.find(function(l){return l.rel === 'alternate';}).href : '#');
+            const heroCat = (hero.category && hero.category[0] && hero.category[0].term ? hero.category[0].term : 'জাতীয়');
+            let heroImg = 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?auto=format&fit=crop&w=1200&q=80';
+            if (hero.media$thumbnail && hero.media$thumbnail.url) {
+              heroImg = hero.media$thumbnail.url.replace('/s72-c/', '/w1200-h675-p-k-no-nu/');
+            } else if (hero.content && hero.content.$t) {
+              const m = hero.content.$t.match(/<img[^>]+src=["']([^"']+)["']/i);
+              if (m) heroImg = m[1];
+            }
+            const heroTime = hero.published ? formatRelativeBengaliTime(hero.published.$t) : '১ ঘণ্টা আগে';
+
+            const portalHtml = `
+              <div class="portal-main-wrapper">
+                <div class="portal-grid-layout">
+                  <div class="portal-primary-col">
+                    <article class="hero-lead-card">
+                      <a href="${heroLink}">
+                        <div class="hero-media-wrap">
+                          <img src="${heroImg}" alt="${heroTitle}" />
+                          <div class="hero-gradient-overlay"></div>
+                          <div class="hero-content-overlay">
+                            <span class="hero-category-tag">${heroCat}</span>
+                            <h1 class="hero-headline">${heroTitle}</h1>
+                            <div class="hero-meta">
+                              <span>জনবার্তা অনলাইন ডেস্ক</span> • <span class="relative-time">${heroTime}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </a>
+                    </article>
+
+                    <div class="sublead-story-grid">
+                      ${entries.slice(1, 4).map(e => {
+                        const t = e.title.$t;
+                        const l = (e.link && e.link.find(function(x){return x.rel === 'alternate';}) ? e.link.find(function(x){return x.rel === 'alternate';}).href : '#');
+                        const c = (e.category && e.category[0] && e.category[0].term ? e.category[0].term : 'সংবাদ');
+                        let img = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=600&q=80';
+                        if (e.media$thumbnail && e.media$thumbnail.url) {
+                          img = e.media$thumbnail.url.replace('/s72-c/', '/w500-h280-p-k-no-nu/');
+                        } else if (e.content && e.content.$t) {
+                          const m = e.content.$t.match(/<img[^>]+src=["']([^"']+)["']/i);
+                          if (m) img = m[1];
+                        }
+                        const tm = e.published ? formatRelativeBengaliTime(e.published.$t) : '২ ঘণ্টা আগে';
+                        return `
+                          <article class="story-card">
+                            <a href="${l}" class="story-card-thumb">
+                              <img src="${img}" alt="${t}" />
+                            </a>
+                            <div class="story-card-body">
+                              <div class="story-card-category">${c}</div>
+                              <h2 class="story-card-title"><a href="${l}">${t}</a></h2>
+                              <div class="story-card-time">${tm}</div>
+                            </div>
+                          </article>
+                        `;
+                      }).join('')}
+                    </div>
+
+                    <!-- Category Sections -->
+                    <section class="category-section-block" id="cat-sec-national">
+                      <div class="section-header-bar">
+                        <div class="section-title-wrap"><div class="section-accent-line"></div><h2 class="section-title">জাতীয়</h2></div>
+                        <a class="section-view-more" href="/search/label/জাতীয়">সব খবর ›</a>
+                      </div>
+                      <div class="category-stories-grid" id="grid-national"></div>
+                    </section>
+                    <section class="category-section-block" id="cat-sec-politics">
+                      <div class="section-header-bar">
+                        <div class="section-title-wrap"><div class="section-accent-line"></div><h2 class="section-title">রাজনীতি</h2></div>
+                        <a class="section-view-more" href="/search/label/রাজনীতি">সব খবর ›</a>
+                      </div>
+                      <div class="category-stories-grid" id="grid-politics"></div>
+                    </section>
+                    <section class="category-section-block" id="cat-sec-economy">
+                      <div class="section-header-bar">
+                        <div class="section-title-wrap"><div class="section-accent-line"></div><h2 class="section-title">অর্থনীতি</h2></div>
+                        <a class="section-view-more" href="/search/label/অর্থনীতি">সব খবর ›</a>
+                      </div>
+                      <div class="category-stories-grid" id="grid-economy"></div>
+                    </section>
+                    <section class="category-section-block" id="cat-sec-international">
+                      <div class="section-header-bar">
+                        <div class="section-title-wrap"><div class="section-accent-line"></div><h2 class="section-title">আন্তর্জাতিক</h2></div>
+                        <a class="section-view-more" href="/search/label/আন্তর্জাতিক">সব খবর ›</a>
+                      </div>
+                      <div class="category-stories-grid" id="grid-international"></div>
+                    </section>
+                  </div>
+
+                  <aside class="portal-sidebar">
+                    <div class="sidebar-widget-card">
+                      <div class="widget-heading-box">
+                        <h3 class="widget-heading">সর্বাধিক পঠিত</h3>
+                      </div>
+                      <ul class="trending-list">
+                        ${entries.slice(0, 5).map((e, idx) => {
+                          const t = e.title.$t;
+                          const l = (e.link && e.link.find(function(x){return x.rel === 'alternate';}) ? e.link.find(function(x){return x.rel === 'alternate';}).href : '#');
+                          return `
+                            <li class="trending-item">
+                              <span class="trending-number">${toBnNum(idx + 1)}</span>
+                              <a class="trending-title" href="${l}">${t}</a>
+                            </li>
+                          `;
+                        }).join('')}
+                      </ul>
+                    </div>
+
+                    <div class="fb-widget-box">
+                      <div class="fb-widget-header">
+                        <svg fill="currentColor" height="18" viewBox="0 0 24 24" width="18"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                        <span>ফেসবুকে জনবার্তা</span>
+                      </div>
+                      <div class="fb-widget-content">
+                        <p style="font-size: 14px; color: #475569; margin-bottom: 12px; font-weight: 500;">জনবার্তা অফিসিয়াল ফেসবুক পেজে যুক্ত থাকুন সবার আগে ব্রেকিং সংবাদ পেতে।</p>
+                        <a class="fb-follow-btn" href="https://www.facebook.com/1113447921841506" target="_blank" rel="noopener">
+                          <span>অনুসরণ করুন (Follow)</span>
+                        </a>
+                      </div>
+                    </div>
+
+                    <div class="sidebar-widget-card" style="background: #fff; border-left: 4px solid var(--primary);">
+                      <h4 style="font-family: var(--font-headline); font-size: 16px; font-weight: 800; color: #0f172a; margin-bottom: 8px;">জনবার্তা নীতিমালা</h4>
+                      <p style="font-size: 13px; color: #64748b; line-height: 1.7;">আমরা সত্য ও নিরপেক্ষ সংবাদ পরিবেশনে অঙ্গীকারবদ্ধ। কোনো ব্যক্তি বা রাজনৈতিক চাপের মুখে আপস না করাই আমাদের সাংবাদিকতার মূল শক্তি।</p>
+                    </div>
+                  </aside>
+                </div>
+              </div>
+            `;
+            mainContainer.innerHTML = portalHtml;
+            loadCategoryPosts('জাতীয়', 'grid-national');
+            loadCategoryPosts('রাজনীতি', 'grid-politics');
+            loadCategoryPosts('অর্থনীতি', 'grid-economy');
+            loadCategoryPosts('আন্তর্জাতিক', 'grid-international');
+          }
+        } catch(err) {
+          console.warn('Feed render error:', err);
+        }
+      };
+
+      script.src = '/feeds/posts/default?alt=json-in-script&max-results=10&callback=onBlogFeedLoaded';
+      document.body.appendChild(script);
+    }
+
+    populateHomepageFromFeed();
+  })();
+  //]]>
+  </script>
+
+</body>
+</html>
