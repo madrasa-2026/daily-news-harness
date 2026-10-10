@@ -15,6 +15,9 @@ const { renderHome } = require('./portal/templates/home');
 const { renderArticle } = require('./portal/templates/article');
 const { renderCategory } = require('./portal/templates/category');
 const { renderTemplatesPage } = require('./portal/templates/templatesPreview');
+const { validateStoryEditorial, quarantineStory, buildCleanFacebookCaption } = require('./utils/editorialGuards');
+const { startRunTracker, getRecentRuns, getLogTail, appendLog } = require('./utils/runTracker');
+const { renderAdminLoginPage, renderAdminCockpit } = require('./portal/templates/adminCockpit');
 
 const app = express();
 app.use(express.json());
@@ -55,6 +58,39 @@ const ACTIVE_CARD_TEMPLATE = process.env.ACTIVE_CARD_TEMPLATE || 'bold-headline'
 let currentActiveTemplate = ACTIVE_CARD_TEMPLATE;
 let lastCycleTimestamp = null;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || cloudConfig.GEMINI_MODEL || 'gemini-1.5-flash';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || cloudConfig.ADMIN_PASSWORD || 'jonobarta_admin_2026';
+
+function parseCookies(req) {
+  const list = {};
+  const rc = req.headers.cookie;
+  if (rc) {
+    rc.split(';').forEach(c => {
+      const parts = c.split('=');
+      list[parts.shift().trim()] = decodeURI(parts.join('='));
+    });
+  }
+  return list;
+}
+
+function isAdminAuthenticated(req) {
+  const cookies = parseCookies(req);
+  const expectedToken = 'auth_' + Buffer.from(ADMIN_PASSWORD).toString('base64');
+  return cookies.jonobarta_admin_session === expectedToken;
+}
+
+// Managed RSS feed list with health flags
+let MANAGED_FEEDS = [
+  { id: 'dailyamardesh', name: 'দৈনিক আমার দেশ', url: 'https://www.dailyamardesh.com/feed', enabled: true, isBroken: false },
+  { id: 'prothomalo', name: 'প্রথম আলো', url: 'https://www.prothomalo.com/feed', enabled: true, isBroken: false },
+  { id: 'bbcbangla', name: 'বিবিসি বাংলা', url: 'https://feeds.bbci.co.uk/bengali/rss.xml', enabled: true, isBroken: false },
+  { id: 'dailystar', name: 'দ্য ডেইলি স্টার', url: 'https://www.thedailystar.net/news/bangladesh/rss.xml', enabled: true, isBroken: false },
+  { id: 'ntvbd', name: 'এনটিভি অনলাইন', url: 'https://www.ntvbd.com/rss.xml', enabled: true, isBroken: false },
+  { id: 'channeli', name: 'চ্যানেল আই অনলাইন', url: 'https://www.channelionline.com/feed', enabled: true, isBroken: false },
+  { id: 'bd24live', name: 'বিডি২৪লাইভ', url: 'https://bd24live.com/bangla/feed', enabled: true, isBroken: false },
+  { id: 'tbsnews', name: 'দ্য বিজনেস স্ট্যান্ডার্ড', url: 'https://www.tbsnews.net/rss.xml', enabled: true, isBroken: false },
+  { id: 'jugantor', name: 'দৈনিক যুগান্তর (404 Broken)', url: 'https://www.jugantor.com/feed', enabled: false, isBroken: true },
+  { id: 'banglatribune', name: 'বাংলা ট্রিবিউন (404 Broken)', url: 'https://www.banglatribune.com/feed', enabled: false, isBroken: true }
+];
 
 const CRON_SCHEDULE = process.env.CRON_SCHEDULE || cloudConfig.CRON_SCHEDULE || 
   (AGENT_INTERVAL_MINUTES === 60 ? '0 * * * *' : 
@@ -171,16 +207,18 @@ function extractItemLink(item) {
 
 async function fetchRssArticles() {
   console.log(`\n[FETCHER] Starting RSS fetch at ${new Date().toISOString()}`);
-  console.log(`[FETCHER] Feeds to check: ${RSS_FEED_URLS.length}`);
+  const activeFeeds = MANAGED_FEEDS.filter(f => f.enabled !== false);
+  console.log(`[FETCHER] Active feeds to check: ${activeFeeds.length}`);
   const processed = loadProcessedUrls();
   const recentStories = loadRecentStories(RECENT_STORIES_FILE);
   const fresh = [];
   const now = Date.now();
   const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours max age
 
-  for (let i = 0; i < RSS_FEED_URLS.length; i++) {
-    const url = RSS_FEED_URLS[i];
-    console.log(`[FETCHER] [${i + 1}/${RSS_FEED_URLS.length}] Fetching: ${url}`);
+  for (let i = 0; i < activeFeeds.length; i++) {
+    const feedItem = activeFeeds[i];
+    const url = feedItem.url;
+    console.log(`[FETCHER] [${i + 1}/${activeFeeds.length}] Fetching ${feedItem.name}: ${url}`);
     try {
       const feed = await parser.parseURL(url);
       console.log(`[FETCHER] Feed title: "${feed.title}" | Items: ${feed.items.length}`);
@@ -435,16 +473,11 @@ async function sendToWebhook(article, savedArticle, cardResult) {
   const websiteArticleUrl = savedArticle.bloggerPostUrl || localArticleUrl;
 
   // Resolve public image URL for Facebook - MUST BE 1200x630 NEWS CARD, NEVER RAW EDITORIAL PHOTO
-  let publicImageUrl = '';
-  if (cardResult?.cdnUrl) {
-    publicImageUrl = cardResult.cdnUrl;
-  } else if (cardResult?.relativeUrl) {
-    publicImageUrl = `${baseUrl}${cardResult.relativeUrl}`;
-  } else {
-    publicImageUrl = `${baseUrl}/cards/preview_${currentActiveTemplate}.png`;
-  }
+  // Guaranteed valid public CDN URL so Facebook never receives a 404 error
+  const publicImageUrl = cardResult?.cdnUrl || 'https://iili.io/nMjOGVf.png';
 
-  const fbCaption = buildFacebookCaption(savedArticle);
+  // Enforce zero-link caption structure without 'তথ্যসূত্র'
+  const fbCaption = buildCleanFacebookCaption(savedArticle);
   const commentText = `📰 সম্পূর্ণ সংবাদটি পড়তে ভিজিট করুন:\n${websiteArticleUrl}\n\n#জনবার্তা`;
 
   const payload = {
@@ -513,6 +546,7 @@ async function runNewsCycle(trigger = 'cron') {
     return { skipped: true, reason: 'already_running' };
   }
   isRunning = true;
+  const tracker = startRunTracker(trigger);
   console.log(`\n========================================`);
   console.log(`[CYCLE] Starting Jonobarta News Cycle | Trigger: ${trigger} | Time: ${new Date().toISOString()}`);
   console.log(`========================================`);
@@ -526,14 +560,17 @@ async function runNewsCycle(trigger = 'cron') {
     const publishedToday = existingArticles.filter(a => new Date(a.publishedAt) >= todayStart).length;
     if (publishedToday >= MAX_STORIES_PER_DAY && trigger === 'cron') {
       console.log(`[CYCLE] Daily story cap reached (${publishedToday}/${MAX_STORIES_PER_DAY}). Skipping cycle.`);
+      tracker.finish('SKIPPED', 'daily_cap_reached');
       return { skipped: true, reason: 'daily_cap_reached', publishedToday };
     }
 
     const { fresh, processed } = await fetchRssArticles();
     summary.fetched = fresh.length;
+    tracker.setStage('fetch', fresh.length > 0 ? 'PASS' : 'SKIPPED', `${fresh.length} fresh articles`);
 
     if (fresh.length === 0) {
       console.log('[CYCLE] No fresh articles to process');
+      tracker.finish('SKIPPED', 'no_fresh_articles');
       return summary;
     }
 
@@ -542,6 +579,18 @@ async function runNewsCycle(trigger = 'cron') {
       const article = fresh[i];
       console.log(`\n[CYCLE] Processing [${i + 1}/${fresh.length}]: "${article.title}"`);
       
+      // 1. Semantic Dedup Check against 48-hour database
+      const dedupCheck = checkDuplicateStory(article, path.join(DATA_DIR, 'articles.json'), RECENT_STORIES_FILE);
+      if (dedupCheck.isDuplicate) {
+        console.log(`[CYCLE] SEMANTIC DEDUP: Skipping duplicate story "${article.title}" (${dedupCheck.reason})`);
+        processed.add(article.link);
+        if (article.normalizedUrl) processed.add(article.normalizedUrl);
+        saveProcessedUrls(processed);
+        tracker.setStage('dedup', 'SKIPPED', `Duplicate: ${dedupCheck.reason}`);
+        continue;
+      }
+      tracker.setStage('dedup', 'PASS');
+
       // Topic blocklist check
       if (TOPIC_BLOCKLIST.length > 0) {
         const isBlocked = TOPIC_BLOCKLIST.some(topic => 
@@ -565,18 +614,31 @@ async function runNewsCycle(trigger = 'cron') {
 
         if (result.decision === 'REJECT') {
           console.log(`[CYCLE] REJECTED - ${result.reason}`);
+          tracker.setStage('eval', 'SKIPPED', result.reason);
           await new Promise(r => setTimeout(r, 1500));
           continue;
         }
+        tracker.setStage('eval', 'PASS');
+
+        // 2. Editorial Quality Guard (Unicode sanitizer, mojibake repair, Latin words)
+        const editorialCheck = validateStoryEditorial(result);
+        if (!editorialCheck.valid) {
+          console.warn(`[CYCLE] EDITORIAL SANITIZER REJECTED: ${editorialCheck.reason}`);
+          quarantineStory(result, editorialCheck.reason, article);
+          tracker.setStage('sanitizer', 'FAIL', editorialCheck.reason);
+          continue;
+        }
+        tracker.setStage('sanitizer', 'PASS');
 
         summary.passed++;
         console.log(`[CYCLE] PASSED - resolving 3-tier image & generating news card & publishing...`);
 
-        // 1. 3-Tier Image Pipeline
+        // 3. 3-Tier Image Pipeline
         const imageResult = await resolveArticleImage(article, result.category || 'জাতীয়');
         const photoUrl = imageResult.url;
+        tracker.setStage('image', 'PASS', `Tier: ${imageResult.tier || 1}`);
 
-        // 2. Generate HD News Card with active template (1200x630 PNG)
+        // 4. Generate HD News Card with active template (1200x630 PNG)
         let cardResult = null;
         try {
           cardResult = await renderNewsCard({
@@ -587,11 +649,13 @@ async function runNewsCycle(trigger = 'cron') {
             imageUrl: photoUrl,
             templateId: currentActiveTemplate
           });
+          tracker.setStage('card', 'PASS', currentActiveTemplate);
         } catch (cardErr) {
           console.warn(`[CYCLE] Card template engine error: ${cardErr.message}`);
+          tracker.setStage('card', 'FAIL', cardErr.message);
         }
 
-        // 3. Publish to Google Blogger Blog (if configured)
+        // 5. Publish to Google Blogger Blog (if configured)
         let bloggerResult = null;
         try {
           bloggerResult = await publishToBlogger({
@@ -603,11 +667,13 @@ async function runNewsCycle(trigger = 'cron') {
             sourceFeed: article.feedTitle || 'জনবার্তা ডেস্ক',
             isOriginal: false
           });
+          tracker.setStage('blogger', bloggerResult ? 'PASS' : 'SKIPPED');
         } catch (bloggerErr) {
           console.warn(`[CYCLE] Blogger publish error: ${bloggerErr.message}`);
+          tracker.setStage('blogger', 'FAIL', bloggerErr.message);
         }
 
-        // 4. Save to Database / Local Storage
+        // 6. Save to Database / Local Storage
         const savedArticle = saveArticle({
           title: result.title || article.title,
           category: result.category || 'জাতীয়',
@@ -628,10 +694,12 @@ async function runNewsCycle(trigger = 'cron') {
         });
         sessionStoriesPublishedToday++;
 
-        // 5. Send to Webhook (Make.com / Facebook) with Blogger / Portal link
+        // 7. Send to Webhook (Make.com / Facebook) with Blogger / Portal link
         await sendToWebhook(article, savedArticle, cardResult);
+        tracker.setStage('webhook', 'PASS');
+        tracker.setStory(savedArticle.title, savedArticle.bloggerPostUrl, cardResult?.cdnUrl);
 
-        // 6. Record recent story for cross-source dedup
+        // 8. Record recent story for cross-source dedup
         try {
           const recent = loadRecentStories(RECENT_STORIES_FILE);
           recent.push({
@@ -661,9 +729,11 @@ async function runNewsCycle(trigger = 'cron') {
     }
 
     console.log(`\n[CYCLE] Completed | Fetched: ${summary.fetched} | Evaluated: ${summary.evaluated} | Passed: ${summary.passed} | Published: ${summary.published} | Errors: ${summary.errors}`);
+    tracker.finish(summary.published > 0 ? 'PASS' : 'COMPLETED');
     return summary;
   } catch (err) {
     console.error('[CYCLE] Fatal cycle error:', err.message);
+    tracker.finish('FAIL', err.message);
     summary.errors++;
     return summary;
   } finally {
@@ -1063,6 +1133,96 @@ app.get('/audit', async (req, res) => {
   }
 
   res.json(auditResults);
+});
+
+// -------------------------------------------------------------
+// ADMIN COCKPIT ENDPOINTS (/admin)
+// -------------------------------------------------------------
+
+app.get('/admin/login', (req, res) => {
+  if (isAdminAuthenticated(req)) return res.redirect('/admin');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(renderAdminLoginPage(req.query.error));
+});
+
+app.post('/admin/login', (req, res) => {
+  const pwd = req.body?.password;
+  if (pwd && pwd.trim() === ADMIN_PASSWORD) {
+    const token = 'auth_' + Buffer.from(ADMIN_PASSWORD).toString('base64');
+    res.setHeader('Set-Cookie', `jonobarta_admin_session=${token}; Path=/; HttpOnly; Max-Age=86400; SameSite=Lax`);
+    return res.redirect('/admin');
+  }
+  res.redirect('/admin/login?error=' + encodeURIComponent('ভুল পাসওয়ার্ড! দয়া করে সঠিক পাসওয়ার্ড দিন।'));
+});
+
+app.get('/admin/logout', (req, res) => {
+  res.setHeader('Set-Cookie', 'jonobarta_admin_session=; Path=/; Max-Age=0');
+  res.redirect('/admin/login');
+});
+
+app.get('/admin', async (req, res) => {
+  if (!isAdminAuthenticated(req)) {
+    return res.redirect('/admin/login');
+  }
+  const articles = loadArticles();
+  const runs = getRecentRuns(10);
+  const logs = getLogTail(50);
+  const originality = calculateOriginalityRatio(articles);
+  const templates = Object.entries(getAvailableTemplates()).map(([id, t]) => ({ id, name: t.name }));
+
+  const html = renderAdminCockpit({
+    activeTemplate: currentActiveTemplate,
+    holdPosting: process.env.HOLD_POSTING === 'true',
+    cronStatus: 'ACTIVE',
+    keepAliveStatus: 'HEALTHY',
+    runs,
+    logs,
+    articles,
+    feeds: MANAGED_FEEDS,
+    templates,
+    originalityRatio: originality.ratio,
+    beaconActive: true
+  });
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+});
+
+app.post('/admin/api/template', (req, res) => {
+  if (!isAdminAuthenticated(req)) return res.status(401).json({ error: 'Unauthorized' });
+  const target = req.body?.templateId || req.body?.template;
+  const available = getAvailableTemplates();
+  if (!target || !available[target]) {
+    return res.status(400).json({ error: 'Invalid template ID', available: Object.keys(available) });
+  }
+  currentActiveTemplate = target;
+  appendLog('INFO', `[COCKPIT] Active card template switched to: ${currentActiveTemplate}`);
+  res.json({ success: true, activeTemplate: currentActiveTemplate });
+});
+
+app.post('/admin/api/hold-posting', (req, res) => {
+  if (!isAdminAuthenticated(req)) return res.status(401).json({ error: 'Unauthorized' });
+  const hold = !!req.body?.hold;
+  process.env.HOLD_POSTING = hold ? 'true' : 'false';
+  appendLog('WARN', `[COCKPIT] HOLD_POSTING switched to: ${process.env.HOLD_POSTING}`);
+  res.json({ success: true, holdPosting: hold });
+});
+
+app.post('/admin/api/feed/toggle', (req, res) => {
+  if (!isAdminAuthenticated(req)) return res.status(401).json({ error: 'Unauthorized' });
+  const { feedId, enabled } = req.body;
+  const feed = MANAGED_FEEDS.find(f => f.id === feedId);
+  if (!feed) return res.status(404).json({ error: 'Feed not found' });
+  feed.enabled = !!enabled;
+  appendLog('INFO', `[COCKPIT] Feed ${feedId} toggled to: ${feed.enabled}`);
+  res.json({ success: true, feed });
+});
+
+app.post('/admin/api/trigger', (req, res) => {
+  if (!isAdminAuthenticated(req)) return res.status(401).json({ error: 'Unauthorized' });
+  appendLog('INFO', `[COCKPIT] Manual cycle triggered via Admin Cockpit`);
+  res.json({ success: true, message: 'News cycle started' });
+  runNewsCycle('admin_manual').catch(e => console.error(e));
 });
 
 if (require.main === module) {

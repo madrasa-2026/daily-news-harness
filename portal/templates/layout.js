@@ -135,6 +135,10 @@ function renderLayout({
     </div>
   </footer>
 
+  <!-- Cloudflare Web Analytics Beacon -->
+  <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "jonobarta-analytics-beacon-2026"}'></script>
+  <!-- End Cloudflare Web Analytics Beacon -->
+
 </body>
 </html>`;
 }

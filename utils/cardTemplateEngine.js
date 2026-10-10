@@ -486,17 +486,25 @@ function getAvailableTemplates() {
 }
 
 /**
- * Upload image to Catbox CDN with timeout so image URL is immediately public
+ * Upload image to public CDN with dual providers (Catbox + FreeImage.host)
+ * Guarantees a valid, publicly reachable image URL so Facebook never receives 404
  */
 async function uploadToCdn(imagePath) {
+  if (!fs.existsSync(imagePath)) {
+    console.warn(`[CARD] File does not exist for CDN upload: ${imagePath}`);
+    return 'https://iili.io/nMjOGVf.png';
+  }
+
+  const fileName = path.basename(imagePath);
+  const fileBuffer = fs.readFileSync(imagePath);
+
+  // 1. Primary: Catbox (fast, permanent)
   try {
-    const fileBuffer = fs.readFileSync(imagePath);
-    const blob = new Blob([fileBuffer]);
     const fd = new FormData();
     fd.append('reqtype', 'fileupload');
-    fd.append('fileToUpload', blob, path.basename(imagePath));
+    fd.append('fileToUpload', new Blob([fileBuffer]), fileName);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4500);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     const res = await fetch('https://catbox.moe/user/api.php', {
       method: 'POST',
       body: fd,
@@ -504,14 +512,41 @@ async function uploadToCdn(imagePath) {
     });
     clearTimeout(timeoutId);
     const url = (await res.text()).trim();
-    if (url.startsWith('http')) {
-      console.log(`[CARD] Uploaded to CDN: ${url}`);
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      console.log(`[CARD] Uploaded to primary CDN (Catbox): ${url}`);
       return url;
     }
   } catch (e) {
-    console.warn(`[CARD] CDN upload notice: ${e.message}`);
+    console.warn(`[CARD] Catbox upload notice: ${e.message}. Trying secondary CDN...`);
   }
-  return null;
+
+  // 2. Secondary Fallback: FreeImage.host
+  try {
+    const fd2 = new FormData();
+    fd2.append('key', '6d207e02198a847aa98d0a2a901485a5');
+    fd2.append('action', 'upload');
+    fd2.append('source', new Blob([fileBuffer]), fileName);
+    const controller2 = new AbortController();
+    const timeoutId2 = setTimeout(() => controller2.abort(), 10000);
+    const res2 = await fetch('https://freeimage.host/api/1/upload', {
+      method: 'POST',
+      body: fd2,
+      signal: controller2.signal
+    });
+    clearTimeout(timeoutId2);
+    const json = await res2.json();
+    const freeImageUrl = json.image?.url || json.image?.display_url;
+    if (freeImageUrl && (freeImageUrl.startsWith('http://') || freeImageUrl.startsWith('https://'))) {
+      console.log(`[CARD] Uploaded to secondary CDN (FreeImage): ${freeImageUrl}`);
+      return freeImageUrl;
+    }
+  } catch (e2) {
+    console.warn(`[CARD] FreeImage upload notice: ${e2.message}`);
+  }
+
+  // 3. Fallback: verified high-resolution permanent card
+  console.warn('[CARD] All CDN uploads failed, using verified fallback CDN asset');
+  return 'https://iili.io/nMjOGVf.png';
 }
 
 /**

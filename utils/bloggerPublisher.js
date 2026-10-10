@@ -49,17 +49,20 @@ async function getAccessToken() {
   }
 }
 
+const { resolveBengaliAttribution } = require('./editorialGuards');
+
 /**
  * Format article into clean, AdSense-ready Blogger HTML
  */
-function buildBloggerHtml({ summary, paragraphs, imageUrl, sourceFeed, isOriginal }) {
+function buildBloggerHtml({ title, summary, paragraphs, imageUrl, sourceFeed, isOriginal }) {
   let html = `<div style="font-family: 'SolaimanLipi', 'Hind Siliguri', Arial, sans-serif; font-size: 18px; line-height: 1.8; color: #1e293b;">`;
 
-  // 1. Feature image at top
+  // 1. Feature image at top with headline as alt text
   if (imageUrl) {
+    const cleanAlt = (title || 'জনবার্তা সংবাদ').replace(/"/g, '&quot;');
     html += `
     <div style="text-align: center; margin-bottom: 24px;">
-      <img src="${imageUrl}" alt="Jonobarta News" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" />
+      <img src="${imageUrl}" alt="${cleanAlt}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" />
     </div>`;
   }
 
@@ -79,8 +82,9 @@ function buildBloggerHtml({ summary, paragraphs, imageUrl, sourceFeed, isOrigina
     }
   });
 
-  // 4. Source attribution line
-  const attribution = isOriginal ? 'জনবার্তা বিশেষ অনুসন্ধান ডেস্ক' : (sourceFeed || 'জনবার্তা ডেস্ক');
+  // 4. Source attribution line (strictly in Bengali)
+  const rawAttribution = isOriginal ? 'জনবার্তা বিশেষ অনুসন্ধান ডেস্ক' : (sourceFeed || 'জনবার্তা ডেস্ক');
+  const attribution = resolveBengaliAttribution(rawAttribution);
   html += `
   <div style="margin-top: 30px; padding-top: 14px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #64748b; font-weight: 600;">
     📌 তথ্যসূত্র: ${attribution}
