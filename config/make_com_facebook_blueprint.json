@@ -1,0 +1,435 @@
+{
+  "name": "Integration Webhooks, Facebook Pages",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "version": 1,
+      "parameters": {
+        "hook": 4423736,
+        "maxResults": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": -152,
+          "y": -8
+        },
+        "restore": {
+          "parameters": {
+            "hook": {
+              "data": {
+                "editable": "true"
+              },
+              "label": "Jonobarta Engine"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "hook",
+            "type": "hook:gateway-webhook",
+            "label": "Webhook",
+            "required": true
+          },
+          {
+            "name": "maxResults",
+            "type": "number",
+            "label": "Maximum number of results"
+          }
+        ]
+      }
+    },
+    {
+      "id": 5,
+      "module": "http:DownloadFile",
+      "version": 4,
+      "parameters": {
+        "authenticationType": "noAuth"
+      },
+      "filter": null,
+      "mapper": {
+        "url": "{{1.image_url}}",
+        "stopOnHttpError": true,
+        "shareCookies": false
+      },
+      "metadata": {
+        "designer": {
+          "x": 67,
+          "y": -2
+        },
+        "setupValidation": {
+          "version": 1,
+          "configuration": "4919aca6fc9c0b89",
+          "result": {
+            "valid": true,
+            "fields": []
+          }
+        },
+        "restore": {
+          "parameters": {
+            "authenticationType": {
+              "label": "No authenticationUse when no credentials are required for the request."
+            }
+          },
+          "expect": {
+            "stopOnHttpError": {
+              "mode": "chose"
+            },
+            "shareCookies": {
+              "mode": "chose"
+            },
+            "headers": {
+              "mode": "chose"
+            },
+            "queryParameters": {
+              "mode": "chose"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "authenticationType",
+            "type": "select",
+            "label": "Authentication type",
+            "required": true,
+            "validate": {
+              "enum": [
+                "noAuth",
+                "apiKeyConnection",
+                "basicAuthConnection",
+                "oAuth",
+                "apiKey",
+                "basicAuth"
+              ]
+            }
+          }
+        ],
+        "expect": [
+          {
+            "name": "url",
+            "type": "url",
+            "label": "URL",
+            "required": true
+          },
+          {
+            "name": "stopOnHttpError",
+            "type": "boolean",
+            "label": "Return error if HTTP request fails",
+            "required": true
+          },
+          {
+            "name": "shareCookies",
+            "type": "boolean",
+            "label": "Share cookies with other HTTP modules",
+            "required": true
+          },
+          {
+            "name": "headers",
+            "type": "array",
+            "label": "Headers",
+            "spec": {
+              "name": "value",
+              "label": "Header",
+              "type": "collection",
+              "spec": [
+                {
+                  "name": "name",
+                  "label": "Name",
+                  "type": "text",
+                  "required": true,
+                  "validate": {
+                    "pattern": "^[-!#$%&'*+.^_`|~0-9A-Za-z]+$"
+                  }
+                },
+                {
+                  "name": "value",
+                  "label": "Value",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          {
+            "name": "queryParameters",
+            "type": "array",
+            "label": "Query parameters",
+            "spec": {
+              "name": "value",
+              "label": "Parameter",
+              "type": "collection",
+              "spec": [
+                {
+                  "name": "name",
+                  "label": "Name",
+                  "type": "text",
+                  "required": true
+                },
+                {
+                  "name": "value",
+                  "label": "Value",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "module": "facebook-pages:CreatePostWithPhotos",
+      "version": 6,
+      "parameters": {
+        "__IMTCONN__": 14653907
+      },
+      "mapper": {
+        "page_id": "1113447921841506",
+        "photos": [
+          {
+            "type": "data",
+            "fileName": "{{5.fileName}}",
+            "data": "{{5.data}}"
+          }
+        ],
+        "message": "{{1.message}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 290,
+          "y": 1
+        },
+        "setupValidation": {
+          "version": 1,
+          "configuration": "e1659c04a9790349",
+          "result": {
+            "valid": true,
+            "fields": []
+          }
+        },
+        "restore": {
+          "parameters": {
+            "__IMTCONN__": {
+              "label": "jonobarta facebook (Jothan Lee)",
+              "data": {
+                "scoped": "true",
+                "connection": "facebook"
+              }
+            }
+          },
+          "expect": {
+            "page_id": {
+              "mode": "chose",
+              "label": "জনবার্তা"
+            },
+            "photos": {
+              "mode": "chose",
+              "items": [
+                {
+                  "type": {
+                    "mode": "chose",
+                    "label": "Map from previous module"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "__IMTCONN__",
+            "type": "account:facebook",
+            "label": "Connection",
+            "required": true
+          }
+        ],
+        "expect": [
+          {
+            "name": "page_id",
+            "type": "select",
+            "label": "Page",
+            "required": true
+          },
+          {
+            "name": "photos",
+            "type": "array",
+            "label": "Photos",
+            "validate": {
+              "maxItems": 30,
+              "minItems": 1
+            },
+            "required": true,
+            "spec": [
+              {
+                "name": "type",
+                "type": "select",
+                "label": "Image input type",
+                "options": [
+                  {
+                    "label": "Map from previous module",
+                    "value": "data",
+                    "nested": [
+                      {
+                        "name": "fileName",
+                        "type": "filename",
+                        "label": "File name",
+                        "required": true,
+                        "semantic": "file:name"
+                      },
+                      {
+                        "name": "data",
+                        "type": "buffer",
+                        "label": "Data",
+                        "required": true,
+                        "semantic": "file:data"
+                      }
+                    ],
+                    "default": true
+                  },
+                  {
+                    "label": "Use a photo URL",
+                    "value": "url",
+                    "nested": [
+                      {
+                        "name": "url",
+                        "type": "url",
+                        "label": "URL",
+                        "required": true
+                      }
+                    ]
+                  }
+                ],
+                "required": true
+              },
+              {
+                "name": "caption",
+                "type": "text",
+                "label": "Image caption"
+              }
+            ]
+          },
+          {
+            "name": "message",
+            "type": "text",
+            "label": "Post caption"
+          },
+          {
+            "name": "date",
+            "type": "date",
+            "label": "Publish date"
+          }
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "module": "facebook-pages:CreateComment",
+      "version": 6,
+      "parameters": {
+        "__IMTCONN__": 14653907
+      },
+      "mapper": {
+        "page_id": "1113447921841506",
+        "message": "{{1.comment_text}}",
+        "id": "{{2.id}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 502,
+          "y": 5
+        },
+        "setupValidation": {
+          "version": 1,
+          "configuration": "4b64cfc838e449a",
+          "result": {
+            "valid": true,
+            "fields": []
+          }
+        },
+        "restore": {
+          "parameters": {
+            "__IMTCONN__": {
+              "label": "jonobarta facebook (Jothan Lee)",
+              "data": {
+                "scoped": "true",
+                "connection": "facebook"
+              }
+            }
+          },
+          "expect": {
+            "page_id": {
+              "mode": "chose",
+              "label": "জনবার্তা"
+            },
+            "attachment": {
+              "mode": "chose",
+              "label": "Empty"
+            },
+            "id": {
+              "mode": "edit"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "__IMTCONN__",
+            "type": "account:facebook",
+            "label": "Connection",
+            "required": true
+          }
+        ],
+        "expect": [
+          {
+            "name": "page_id",
+            "type": "select",
+            "label": "Page",
+            "required": true
+          },
+          {
+            "name": "message",
+            "type": "text",
+            "label": "Comment text"
+          },
+          {
+            "name": "attachment",
+            "type": "select",
+            "label": "Attachment type",
+            "validate": {
+              "enum": [
+                "url",
+                "share"
+              ]
+            }
+          },
+          {
+            "name": "id",
+            "type": "select",
+            "label": "Post ID",
+            "required": true
+          }
+        ]
+      }
+    }
+  ],
+  "metadata": {
+    "instant": true,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "slots": null,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": false,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "eu2.make.com",
+    "notes": []
+  }
+}
