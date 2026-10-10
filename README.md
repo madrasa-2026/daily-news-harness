@@ -1,322 +1,162 @@
-# 🚀 Daily News Harness — Automated Facebook News Poster
+# 📰 Jonobarta (জনবার্তা) — AI Newsroom Automation Agent
 
-> Zero-code knowledge needed. Follow this guide click-by-click and you will have a 24/7 bot that fetches news via RSS, rewrites it with AI, and posts to your Facebook Page via Pabbly.
-
-> **Architecture & Scope Notice**: An experimental SSR web portal was evaluated, but because Render's free tier uses an ephemeral filesystem where disk-persisted articles vanish on container restart, all web portal claims and dead routes have been intentionally cut. This repository is dedicated exclusively as an honest, production-grade automated Facebook news publisher.
+> **Brand**: **Jonobarta (জনবার্তা)** — *সত্য, ন্যায় ও জনমানুষের নির্ভীক ডিজিটাল সংবাদমাধ্যম*  
+> An autonomous, 24/7 AI-powered news engine inspired by GrowHix media automation. It monitors Bangladeshi news RSS feeds, produces 100% original rewritten journalism without verbatim copying, resolves a 3-tier editorial image pipeline, generates 1200×630 news cards across 6 distinct templates, publishes full articles to Google Blogger, and dispatches rich card posts to Facebook via Make.com.
 
 ---
 
-## 📋 What This Does (Simple Explanation)
+## 🌟 Key Architecture & Capabilities
 
 ```
-Every 4 hours:
-RSS News Feeds (BBC, CNN, Reuters…) → Your Render Server → Google Gemini AI evaluates & rewrites → Pabbly Webhook → Your Facebook Page (auto post)
+                  ┌──────────────────────────────────────────────┐
+                  │ 1. RSS COLLECTOR & DEDUPLICATION (Every 1h)  │
+                  │ Prothom Alo, Amar Desh, BBC Bangla, etc.     │
+                  └──────────────────────┬───────────────────────┘
+                                         ▼
+                  ┌──────────────────────────────────────────────┐
+                  │ 2. ZERO-VERBATIM LLM REWRITE ENGINE          │
+                  │ Strict Bangla journalistic synthesis & audit │
+                  └──────────────────────┬───────────────────────┘
+                                         ▼
+                  ┌──────────────────────────────────────────────┐
+                  │ 3. 3-TIER EDITORIAL IMAGE PIPELINE           │
+                  │ Tier 1: Source Press Photo                   │
+                  │ Tier 2: Free Unsplash Stock API              │
+                  │ Tier 3: Curated Editorial Category Artwork   │
+                  └──────────────────────┬───────────────────────┘
+                                         ▼
+                  ┌──────────────────────────────────────────────┐
+                  │ 4. GOOGLE BLOGGER API v3 PUBLISHER           │
+                  │ Creates live post with featured image & tags │
+                  └──────────────────────┬───────────────────────┘
+                                         ▼
+                  ┌──────────────────────────────────────────────┐
+                  │ 5. 1200×630 NEWS CARD TEMPLATE ENGINE        │
+                  │ 6 Built-in templates + /templates custom dir │
+                  └──────────────────────┬───────────────────────┘
+                                         ▼
+                  ┌──────────────────────────────────────────────┐
+                  │ 6. MAKE.COM WEBHOOK DISPATCHER               │
+                  │ Posts card PNG + headline + Blogger URL to FB│
+                  └──────────────────────────────────────────────┘
 ```
 
-- **You NEVER pay for Facebook API** — Pabbly handles it.
-- **You NEVER pay for AI** — Gemini free tier = 60 requests/min, more than enough.
-- **Render Free Tier** hosts your code 24/7 (with a tiny keep-alive trick).
-- **No duplicate posts** — URLs are saved in `data/processed.json`.
+---
+
+## ⚙️ Environment Variables Reference
+
+Configure these in your Render Dashboard (**Environment** tab) or your local `.env` file:
+
+| Variable Name | Default | Required? | Description |
+|---|---|---|---|
+| `PORT` | `10000` | No | Server listening port |
+| `RSS_FEED_URLS` | 8 Bangladeshi feeds | Yes | Comma-separated list of RSS feeds to monitor |
+| `GROQ_API_KEY` | - | Yes (or Gemini) | Groq API Key for fast LLM inference (`gsk_...`) |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | No | Preferred Groq model |
+| `GEMINI_API_KEY` | - | Optional | Fallback Google Gemini API key (`AIzaSy...`) |
+| `MAKE_WEBHOOK_URL` | - | Yes | Make.com webhook URL connected to Facebook Page |
+| `AGENT_INTERVAL_MINUTES`| `60` | No | Main news check cycle frequency in minutes |
+| `MAX_POSTS_PER_CYCLE` | `1` | No | Max stories published per cron execution |
+| `MAX_STORIES_PER_DAY` | `15` | No | Daily publication cap to prevent spam |
+| `TOPIC_BLOCKLIST` | `""` | No | Comma-separated banned keywords/topics |
+| `ACTIVE_CARD_TEMPLATE`| `bold-headline` | No | Active news card design (`bold-headline`, `image-dominant`, `minimal`, `breaking-news`, `quote-style`, `dark-premium`) |
+| `UNSPLASH_ACCESS_KEY` | - | Optional | Free Unsplash API access key for Tier 2 stock photos |
+| `BLOGGER_BLOG_ID` | - | Optional | Blogger numeric blog ID |
+| `BLOGGER_CLIENT_ID` | - | Optional | Google Cloud OAuth 2.0 Client ID |
+| `BLOGGER_CLIENT_SECRET` | - | Optional | Google Cloud OAuth 2.0 Client Secret |
+| `BLOGGER_REFRESH_TOKEN` | - | Optional | Long-lived Google OAuth 2.0 refresh token |
+| `HOLD_POSTING` | `false` | No | Emergency switch: set `true` to pause Facebook posting |
+
+*(For step-by-step instructions on setting up Blogger API credentials, see [`Instruction/blogger-api-guide.md`](Instruction/blogger-api-guide.md)).*
 
 ---
 
-## 📦 What You Get In This Folder
+## 🎨 1200×630 News Card Templates
 
-```
-daily-news-harness/
-├── index.js          ← Main server + fetcher + brain + publisher
-├── package.json      ← Dependencies
-├── .env.example      ← Template for your keys (copy this)
-├── .env              ← Your real keys (you will create this - NEVER share)
-├── data/processed.json ← Auto-created - stores posted URLs
-├── .gitignore
-└── README.md         ← This file
-```
+Jonobarta includes 6 built-in, production-ready news card designs:
 
----
+1. **`bold-headline`**: Signature Al Jazeera-inspired deep crimson card with auto-shrinking Bengali typography.
+2. **`image-dominant`**: TV news lower-third overlay style (Somoy TV / BBC Bangla look).
+3. **`minimal`**: Crisp light editorial layout with high-contrast text and subtle borders.
+4. **`breaking-news`**: Urgent flash layout with dark background and crimson alert banner.
+5. **`quote-style`**: Editorial statement design with oversized quotation marks and speaker prominence.
+6. **`dark-premium`**: Obsidian background with gold borders and exclusive badges.
 
-## PART 1 — Get Your Free AI Key (5 minutes)
-
-You need **ONE** of these. Gemini is recommended.
-
-### Option A: Google Gemini (Recommended - Free Forever)
-
-1. Go to **https://aistudio.google.com/app/apikey**
-2. Sign in with any Google/Gmail account.
-3. Click blue **"Create API key"** → **"Create API key in new project"** (name it anything, e.g. `news-harness`).
-4. Copy the key that looks like `AIzaSy...` (starts with AIza). **Copy it to Notepad now.**
-5. Free limit: **1500 requests/day** — your bot uses ~12/day. You will never hit it.
-
-> If you see `Billing` warning, ignore — Gemini Flash is free, no credit card needed.
-
-### Option B: Groq (Alternative, also free - even faster)
-
-1. Go to **https://console.groq.com/keys**
-2. Sign in → Click **"Create API Key"** → Copy key `gsk_...`
-3. Use this as `GROQ_API_KEY` instead (code supports both, Gemini is prioritized if both are set).
-
-**Save your key! You will paste it in Render in Part 3.**
+### Template Switching & Custom Templates
+- **Dynamic Switch**: Change the active template anytime without restarting via `POST /template` with `{"template": "image-dominant"}` or `GET /template/image-dominant`.
+- **Custom Templates**: Add your own HTML/CSS template in `/templates/<template-name>/template.html` and `template.json`. The engine automatically detects and serves it. See [`templates/README.md`](templates/README.md) for specs.
 
 ---
 
-## PART 2 — Set Up Pabbly Connect → Facebook Page (10 minutes)
+## 📅 Daily Original Content Automation
 
-This is how we post to Facebook WITHOUT coding.
-
-### Step 2.1 - Create Pabbly Account
-
-1. Go to **https://www.pabbly.com** → **Sign Up Free** (free tier = 100 tasks/month).
-2. After login, go to **Pabbly Connect** dashboard → Click **"Create Workflow"** (top right).
-3. Name it: `News Harness to Facebook`
-
-### Step 2.2 - Set Trigger = Webhook
-
-1. In **"Choose App"** search **"Webhook"** → Select **"Webhook by Pabbly"**
-2. **Trigger Event** → Choose **"Catch Webhook"** → Click **Connect**
-3. It gives you a URL like:
-   ```
-   https://connect.pabbly.com/workflow/sendwebhookdata/IjU3NjA...
-   ```
-   **COPY THIS URL — this is your `PABBLY_WEBHOOK_URL`**
-
-4. **DO NOT click "Save & Send Test Request" yet.** Leave this tab open, we will test later.
-
-### Step 2.3 - Set Action = Facebook Pages
-
-1. Click **"+"** to add next step → Search **"Facebook Pages"**
-2. **Action Event** → Choose **"Create Page Post"** → Click **Connect**
-3. Click **"Add New Connection"** → Log in with Facebook → Select your **Facebook Page** (you must be Admin of that page. Create a page first at https://www.facebook.com/pages/create if you don't have one)
-4. Approve all permissions.
-
-### Step 2.4 - Map The Data
-
-In the **Create Page Post** setup:
-
-- **Message**: Click in field → Select from webhook data → Choose `rewritten_post` (or `content`). This is the AI-written post.
-- **Link URL** (optional but recommended): Map → `original_url`
-- Leave other fields default.
-
-> Tip: Your webhook payload contains:
-> ```json
-> {
->   "title": "Original headline",
->   "original_url": "https://...",
->   "rewritten_post": "AI post with emojis + hashtags",
->   "source": "BBC News"
-> }
-> ```
-
-5. Click **"Save & Send Test Request"** → It will say *Waiting for webhook response* until we send a test (next step).
-6. **Keep Pabbly tab open.**
+To build domain authority and qualify for Google AdSense, the agent auto-produces 20–30% original content:
+- **Morning Briefing ("আজকের প্রধান খবর")**: Runs automatically every morning at `01:00 UTC` (**07:00 AM BST**).
+- **Evening Roundup ("দিনের খতিয়ান")**: Runs automatically every evening at `15:00 UTC` (**09:00 PM BST**).
+- Marked with `is_original: true` and labeled `নিজস্ব প্রতিবেদন`.
+- **Manual Trigger**: Run `GET /trigger/briefing?type=morning` or `GET /trigger/briefing?type=evening` anytime.
 
 ---
 
-## PART 3 — Deploy to Render (Free, 7 minutes)
+## 📊 Endpoints & Health Monitoring
 
-### Step 3.1 - Push Code to GitHub
-
-1. Create GitHub account at **https://github.com** (free)
-2. Click **"+" → New repository** → Name: `daily-news-harness` → Public → **Create repository**
-3. Upload files: On repo page click **"Add file → Upload files"** → Drag ALL files from this folder (`index.js`, `package.json`, `.gitignore`, `README.md`, `data/.gitkeep`) → **Commit directly**
-   
-   > **IMPORTANT:** Do NOT upload your `.env` file! It contains secrets. Only upload `.env.example`.
-
-   *Alternative: if you have Git installed:*
-   ```bash
-   git init
-   git add .
-   git commit -m "initial"
-   git branch -M main
-   git remote add origin https://github.com/YOUR_USERNAME/daily-news-harness.git
-   git push -u origin main
-   ```
-
-### Step 3.2 - Create Render Web Service
-
-1. Go to **https://dashboard.render.com** → Sign up with GitHub → **Authorize**.
-2. Click **"New +"** (top right) → **"Web Service"**
-3. **Connect your `daily-news-harness` repo** → Click **Connect**.
-4. Settings:
-   - **Name**: `daily-news-harness` (any)
-   - **Region**: Choose nearest to you
-   - **Branch**: `main`
-   - **Runtime**: `Node`
-   - **Build Command**: `npm install`
-   - **Start Command**: `npm start`
-   - **Plan**: **Free** (crucial!)
-   - **Instance Type**: Free
-
-5. **DO NOT click Create yet** — Scroll down to **Environment Variables**.
-
-### Step 3.3 - Add Environment Variables (Most Important Step)
-
-Click **"Advanced" → "Add Environment Variable"** and add EACH of these exactly:
-
-| Key | Value | Where to get it |
-|-----|-------|-----------------|
-| `RSS_FEED_URLS` | `https://rss.cnn.com/rss/edition.rss,https://feeds.bbci.co.uk/news/world/rss.xml,https://feeds.reutersagency.com/feed/?best-topics=tech&post_type=best` | Copy-paste this default, or add your own comma-separated RSS URLs |
-| `GEMINI_API_KEY` | `AIzaSy...` | From Part 1 |
-| `PABBLY_WEBHOOK_URL` | `https://connect.pabbly.com/workflow/sendwebhookdata/...` | From Part 2.2 |
-| `MAX_POSTS_PER_CYCLE` | `2` | Max posts per 4h (2 is safe for free tiers) |
-| `GEMINI_MODEL` | `gemini-1.5-flash` | Leave as is |
-
-> To use Groq instead/additionally: also add `GROQ_API_KEY` = `gsk_...`
-
-6. Now click **"Create Web Service"** → Render starts building (takes ~2 min). Watch logs.
-
-7. When done, Render gives you a URL like:
-   ```
-   https://daily-news-harness-xxxx.onrender.com
-   ```
-   **COPY THIS URL.**
-
-8. Test it: Open `https://YOUR-URL.onrender.com/health` → You should see `{"status":"ok", ...}`. Also try `/ping` and `/trigger`.
-
-### Step 3.4 - Verify Logs
-
-In Render dashboard → Your service → **Logs** tab → You should see:
-
-```
-[SERVER] Daily News Harness running on port 10000
-[CRON] Scheduled: every 4 hours
-```
-
-If you see errors about missing `GEMINI_API_KEY`, you forgot env vars — go to **Environment** tab → add them → **Save Changes** (auto-redeploys).
+- `GET /health`: JSON status containing uptime, last cycle timestamp, stories published today, originality ratio, and active template.
+- `GET /ping`: Render keep-alive heartbeat endpoint with timestamped logging.
+- `GET /status`: Detailed metrics including processed URLs, card counts, and active templates.
+- `GET /templates`: List all built-in and custom card templates.
+- `GET /trigger`: Manually trigger a news fetch-and-publish cycle.
+- `GET /trigger/briefing?type=morning`: Manually generate an original morning briefing.
+- `GET /audit`: Deep diagnostic check of all monitored RSS feeds and latency.
 
 ---
 
-## PART 4 — Keep Render Awake 24/7 (3 minutes)
+## 🚨 If Posts Stop: Check This First
 
-Render Free spins down after 15 min of no traffic. We trick it by pinging `/health` every 5 min.
+When automated posts stop appearing on Facebook or Blogger, verify these 4 potential failure points:
 
-### Option A: cron-job.org (Recommended, Free)
+### 1. Render Free-Tier Sleep / Hours Budget
+- **The Issue**: Render free tier provides 750 free instance hours per month. If you run multiple web services on the same free account, your monthly budget may run out before the end of the month.
+- **Fix**: Check your Render account usage at [dashboard.render.com](https://dashboard.render.com). Ensure only one free service is running, and confirm an external 5-minute ping (e.g., via [cron-job.org](https://cron-job.org) targeting `/ping`) is keeping the container awake.
 
-1. Go to **https://cron-job.org** → Sign up free.
-2. Click **"Create cronjob"**
-3. Settings:
-   - **Title**: `Keep News Harness Awake`
-   - **URL**: `https://YOUR-RENDER-URL.onrender.com/health` (paste your Render URL + `/health`)
-   - **Schedule**: **Every 5 minutes** (select `Every 5 minutes` from dropdown)
-   - **Request method**: `GET`
-4. **Save**. Done — it will ping forever.
+### 2. Make.com Scenario Status
+- **The Issue**: Make.com free tier scenarios will stop if:
+  - The scenario was manually deactivated or turned OFF.
+  - The monthly operation limit (1,000 ops/month) was reached.
+  - Facebook Page permissions or session tokens expired.
+- **Fix**: Log in to [make.com](https://make.com), open scenario ID `9939541` (or your scenario), click **History**, and inspect recent runs for errors. Ensure the toggle switch is **ON**.
 
-### Option B: UptimeRobot
+### 3. Blogger OAuth Token Validity
+- **The Issue**: If Blogger credentials are configured but posts fail to appear on your blog, the OAuth refresh token may have been revoked or Google Cloud credentials expired.
+- **Fix**: Inspect the `/health` endpoint to verify `"bloggerConfigured": true`. Check Render logs for `[BLOGGER] Token refresh failed`. If needed, re-generate your refresh token following [`Instruction/blogger-api-guide.md`](Instruction/blogger-api-guide.md).
 
-1. **https://uptimerobot.com** → Free account → **Add New Monitor**
-2. **Type**: HTTP(s)
-3. **URL**: `https://YOUR-URL.onrender.com/ping`
-4. **Interval**: 5 minutes → Create.
-
-> Test: Wait 20 min, revisit your Render URL — it should still load instantly (not "waking up").
-
----
-
-## PART 5 — Test End-to-End (2 minutes)
-
-1. Make sure Pabbly workflow is still on **"Waiting for webhook response"**.
-2. In browser, open:
-   ```
-   https://YOUR-URL.onrender.com/trigger
-   ```
-   You should see `{"message":"Cycle started"...}`.
-
-3. Go to **Render → Logs** → Watch:
-   ```
-   [FETCHER] Found 12 fresh articles
-   [BRAIN][GEMINI] Decision: PASS ...
-   [PUBLISH] Success! Status: 200
-   ```
-4. Go back to **Pabbly tab** → It should now show **captured data** → Click **Save**.
-5. Click **"Save & Send Test Request"** on Facebook step → Check your **Facebook Page** — a post should appear!
-
-> First run may take 30-60 sec (AI processing). If no post after 2 min, check logs for `REJECTED` (AI filtered low-quality news) — try triggering again, it will pick next article.
+### 4. AI Provider Rate Limits (Groq / Gemini)
+- **The Issue**: If the LLM provider returns `429 Too Many Requests`, story evaluation will pause.
+- **Fix**: The harness automatically falls back from Groq to Gemini if both keys are set. Verify your API keys in the Render Environment tab.
 
 ---
 
-## 🔧 Configuration
-
-### Change RSS Feeds
-
-In Render → **Environment** → Edit `RSS_FEED_URLS` (comma-separated, no spaces needed):
-
-```
-https://feeds.bbci.co.uk/news/world/rss.xml,https://rss.nytimes.com/services/xml/rss/nyt/World.xml,https://feeds.washingtonpost.com/rss/world
-```
-
-Find RSS URLs by googling `"site name RSS feed"`. Any valid RSS works.
-
-### Change Schedule
-
-In `index.js` line ~160:
-```js
-cron.schedule('0 */4 * * *', ...) // every 4 hours
-// Examples:
-// '0 */2 * * *'  → every 2 hours
-// '0 9,18 * * *' → 9 AM and 6 PM daily
-// '*/30 * * * *' → every 30 min (not recommended - hits limits fast)
-```
-
-### Adjust Posts Per Cycle
-
-Env var `MAX_POSTS_PER_CYCLE=2` → Set to `1` for less spam, `3`+ for more volume.
-
-### View What Was Posted
-
-In Render → **Logs** or check `data/processed.json` (if using disk persistence — note Render free disk resets on deploy, see below).
-
-> **Note on Free Tier Storage:** Render free instances have ephemeral storage — `data/processed.json` resets on each deploy/restart. For 100% no-duplicate guarantee after restarts, upgrade to Render persistence or switch to a free external DB (e.g., Upstash Redis). For most users, duplicate risk after restart is tiny.
-
----
-
-## 📊 Monitoring Your Bot
-
-- **Render Logs**: Dashboard → Your service → Logs (live tail)
-- **Health**: `GET /health` and `/ping` — returns uptime + status
-- **Status**: `GET /status` — shows feeds count + config check
-- **Manual Run**: `GET /trigger` (browser) or `POST /trigger`
-- **Pabbly History**: Pabbly → Workflow → History → see every webhook + Facebook post result
-
-All actions log with prefixes `[FETCHER]`, `[BRAIN]`, `[PUBLISH]`, `[CYCLE]`, `[STORAGE]` — search them in logs.
-
----
-
-## 🐛 Troubleshooting
-
-| Problem | Fix |
-|---------|-----|
-| `No LLM API key` in logs | Add `GEMINI_API_KEY` in Render → Environment → Save |
-| `PABBLY_WEBHOOK_URL not set` | Add correct webhook URL (must start with `https://connect.pabbly.com`) |
-| `Failed for RSS URL` | Feed URL dead — remove it from `RSS_FEED_URLS` or try another RSS |
-| Posts never appear on Facebook | Check Pabbly → History → Did webhook arrive? Did Facebook step error? Reconnect Facebook Page. |
-| AI always REJECTs | Normal — it filters clickbait. Trigger again or lower threshold in prompt (search `average >= 7` in `index.js`) |
-| Render shows `Application exited` | Check Build Command = `npm install`, Start = `npm start`, Node >=18 |
-| `429 Too Many Requests` from Gemini | You hit free limit — wait 1 min, lower `MAX_POSTS_PER_CYCLE` to 1 |
-
-**Need help?** Copy your Render logs and ask for help at https://github.com/anomalyco/opencode/issues
-
----
-
-## 🔒 Security Notes
-
-- **NEVER** commit `.env` to GitHub — `.gitignore` already blocks it.
-- Rotate keys if leaked: regenerate in Google AI Studio / Pabbly.
-- Webhook URL is secret — treat like a password.
-
----
-
-## 🚀 Local Development (Optional)
+## 🛠️ Local Development & Testing
 
 ```bash
+# 1. Install dependencies
 npm install
-cp .env.example .env   # then edit .env with your keys
-npm start              # or npm run dev for auto-reload
-# Open http://localhost:10000/health
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your keys
+
+# 3. Start server
+npm start
+
+# 4. Check status in browser
+http://localhost:10000/health
+http://localhost:10000/templates
+http://localhost:10000/status
 ```
 
 ---
 
-## 📄 License
-
-MIT — free for personal/commercial use.
-
-**You built it! 🎉 Your 24/7 AI newsroom is live. Check your Facebook Page in 4 hours.**
+## 🔒 Security Policy
+- **Zero Hardcoded Secrets**: All webhook URLs, API keys, and client secrets are strictly loaded via environment variables.
+- `.env` and `config.production.json` are excluded via `.gitignore`.
+- Placeholders only are used in documentation and version-controlled files.

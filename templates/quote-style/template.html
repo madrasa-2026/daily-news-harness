@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@500;600;700;800&family=Noto+Serif+Bengali:wght@700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Hind Siliguri', sans-serif; }
+    body {
+      width: 1200px; height: 630px; background: #1e1e24; color: #ffffff;
+      padding: 45px 80px; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden;
+      border-left: 12px solid #e11d48;
+    }
+    .top-strip { display: flex; justify-content: space-between; align-items: center; }
+    .quote-badge { background: #e11d48; color: #fff; font-size: 20px; font-weight: 800; padding: 6px 18px; border-radius: 4px; }
+    .quote-icon { font-size: 80px; color: rgba(225, 29, 72, 0.4); line-height: 0.5; font-family: serif; }
+    .headline {
+      font-family: 'Noto Serif Bengali', serif; font-size: {{fontSize}}px; font-weight: 900; line-height: 1.25;
+      color: #ffffff; margin: 15px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .subtext {
+      font-size: 24px; color: #cbd5e1; font-weight: 500;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .bottom-strip {
+      display: flex; justify-content: space-between; align-items: center;
+      border-top: 1px solid #3f3f46; padding-top: 16px; font-size: 19px; color: #a1a1aa; font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="top-strip">
+    <div class="quote-badge">বিশেষ বক্তব্য ও উদ্ধৃতি • {{category}}</div>
+    <div class="quote-icon">“</div>
+  </div>
+  <div>
+    <h1 class="headline">“{{headline}}”</h1>
+    <p class="subtext">{{subtext}}</p>
+  </div>
+  <div class="bottom-strip">
+    <div>জনবার্তা • বিশিষ্ট মতামত</div>
+    <div>সূত্র: {{source}} • {{dateStr}}</div>
+  </div>
+</body>
+</html>

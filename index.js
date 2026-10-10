@@ -7,7 +7,10 @@ const axios = require('axios');
 const fs = require('fs');
 const { normalizeUrl, loadRecentStories, saveRecentStories, checkDuplicateStory } = require('./utils/dedup');
 const { saveArticle, getArticles, getArticleBySlugOrId, getArticlesByCategory, incrementViews, loadArticles } = require('./utils/storage');
-const { generateNewsCard, CARDS_DIR } = require('./utils/cardGenerator');
+const { renderNewsCard, CARDS_DIR, TEMPLATE_BUILDERS, getAvailableTemplates } = require('./utils/cardTemplateEngine');
+const { resolveArticleImage } = require('./utils/imagePipeline');
+const { publishToBlogger, isBloggerConfigured } = require('./utils/bloggerPublisher');
+const { generateOriginalBriefing, calculateOriginalityRatio } = require('./utils/originalContent');
 const { renderHome } = require('./portal/templates/home');
 const { renderArticle } = require('./portal/templates/article');
 const { renderCategory } = require('./portal/templates/category');
@@ -20,6 +23,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'portal', 'public')));
 app.use('/cards', express.static(path.join(__dirname, 'public', 'cards')));
 app.use('/images', express.static(path.join(__dirname, 'portal', 'public', 'images')));
+app.use('/images/articles', express.static(path.join(__dirname, 'public', 'images', 'articles')));
 
 const PORT = process.env.PORT || 10000;
 
@@ -34,7 +38,7 @@ if (fs.existsSync(cloudConfigFile)) {
   }
 }
 
-const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || cloudConfig.RSS_FEED_URLS || 'https://www.dailyamardesh.com/feed,https://www.prothomalo.com/feed,https://feeds.bbci.co.uk/bengali/rss.xml,https://www.thedailystar.net/news/bangladesh/rss.xml,https://www.ntvbd.com/rss.xml,https://www.channelionline.com/feed')
+const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || cloudConfig.RSS_FEED_URLS || 'https://www.dailyamardesh.com/feed,https://www.prothomalo.com/feed,https://feeds.bbci.co.uk/bengali/rss.xml,https://www.thedailystar.net/news/bangladesh/rss.xml,https://www.ntvbd.com/rss.xml,https://www.channelionline.com/feed,https://www.jugantor.com/feed,https://www.banglatribune.com/feed')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
@@ -43,8 +47,17 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY || cloudConfig.GROQ_API_KEY || '';
 const GROQ_MODEL = process.env.GROQ_MODEL || cloudConfig.GROQ_MODEL || 'openai/gpt-oss-120b';
 const PABBLY_WEBHOOK_URL = process.env.MAKE_WEBHOOK_URL || process.env.PABBLY_WEBHOOK_URL || '';
 const MAX_POSTS_PER_CYCLE = parseInt(process.env.MAX_POSTS_PER_CYCLE || cloudConfig.MAX_POSTS_PER_CYCLE || '1', 10);
+const MAX_STORIES_PER_DAY = parseInt(process.env.MAX_STORIES_PER_DAY || cloudConfig.MAX_STORIES_PER_DAY || '15', 10);
+const AGENT_INTERVAL_MINUTES = parseInt(process.env.AGENT_INTERVAL_MINUTES || cloudConfig.AGENT_INTERVAL_MINUTES || '60', 10);
+const TOPIC_BLOCKLIST = (process.env.TOPIC_BLOCKLIST || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+const ACTIVE_CARD_TEMPLATE = process.env.ACTIVE_CARD_TEMPLATE || 'bold-headline';
+let currentActiveTemplate = ACTIVE_CARD_TEMPLATE;
+let lastCycleTimestamp = null;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || cloudConfig.GEMINI_MODEL || 'gemini-1.5-flash';
-const CRON_SCHEDULE = process.env.CRON_SCHEDULE || cloudConfig.CRON_SCHEDULE || '0 * * * *';
+
+const CRON_SCHEDULE = process.env.CRON_SCHEDULE || cloudConfig.CRON_SCHEDULE || 
+  (AGENT_INTERVAL_MINUTES === 60 ? '0 * * * *' : 
+   AGENT_INTERVAL_MINUTES < 60 ? `*/${AGENT_INTERVAL_MINUTES} * * * *` : '0 * * * *');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const PROCESSED_FILE = path.join(DATA_DIR, 'processed.json');
@@ -268,11 +281,11 @@ DECISION RULE:
 - REJECT only if it is sports, trivial gossip, duplicate filler, or unverified rumor.
 
 WRITING GUIDELINES (IF PASS):
-- Write an authoritative, professional news portal article in standard Bengali.
+- STRICT ZERO-VERBATIM POLICY: You must completely RESTRUCTURE and REWRITE the story in fresh, original Bengali. NEVER copy any sentence or phrase verbatim from the source snippet. Synthesize the facts into your own distinct, authoritative journalistic prose.
 - Output a clean, structured JSON with full article details:
-  * "title": Punchy, formal Bengali headline (max 15 words)
+  * "title": Punchy, original Bengali headline (max 15 words) — never copy the source headline verbatim.
   * "category": Choose one of ["জাতীয়", "রাজনীতি", "অর্থনীতি", "আইন ও আদালত", "সংস্কার ও রাষ্ট্র", "ক্যাম্পাস ও তরুণ", "আন্তর্জাতিক"]
-  * "summary": 1-2 sentence executive summary
+  * "summary": 1-2 sentence executive summary in your own words
   * "paragraphs": Array of 2-3 well-written, informative paragraphs for the website article
   * "speakerQuote": Key quote from speaker or authority (if any)
   * "rewrittenPost": Viral social post text for Facebook with dynamic hook (⚡ বিশেষ প্রতিবেদন | or 🚨 ব্রেকিং নিউজ | or 📢 বড় খবর |), summary bullets, source attribution, and hashtags (#Jonobarta #BangladeshNews #Trending).
@@ -388,7 +401,8 @@ async function extractEditorialPhoto(url) {
 async function sendToWebhook(article, savedArticle, cardResult) {
   const defaultPublicBase = 'https://daily-news-harness.onrender.com';
   const baseUrl = (process.env.RENDER_EXTERNAL_URL || process.env.APP_BASE_URL || defaultPublicBase).replace(/\/+$/, '');
-  const websiteArticleUrl = `${baseUrl}/news/${savedArticle.slug}`;
+  const localArticleUrl = `${baseUrl}/news/${savedArticle.slug}`;
+  const websiteArticleUrl = savedArticle.bloggerPostUrl || localArticleUrl;
 
   // Resolve public image URL for Facebook
   let publicImageUrl = '';
@@ -410,6 +424,7 @@ async function sendToWebhook(article, savedArticle, cardResult) {
     summary: savedArticle.summary,
     original_url: savedArticle.sourceUrl,
     website_url: websiteArticleUrl,
+    blogger_url: savedArticle.bloggerPostUrl || null,
     link: websiteArticleUrl,
     source: savedArticle.sourceFeed,
     published_at: savedArticle.publishedAt,
@@ -421,6 +436,8 @@ async function sendToWebhook(article, savedArticle, cardResult) {
     photo_url: publicImageUrl,
     image_url: publicImageUrl,
     has_card: !!publicImageUrl,
+    template_id: cardResult?.templateId || currentActiveTemplate,
+    is_original: !!savedArticle.isOriginal,
     generated_at: new Date().toISOString()
   };
 
@@ -465,6 +482,16 @@ async function runNewsCycle(trigger = 'cron') {
   const summary = { fetched: 0, evaluated: 0, passed: 0, published: 0, errors: 0 };
 
   try {
+    // Check daily story cap
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const existingArticles = loadArticles();
+    const publishedToday = existingArticles.filter(a => new Date(a.publishedAt) >= todayStart).length;
+    if (publishedToday >= MAX_STORIES_PER_DAY && trigger === 'cron') {
+      console.log(`[CYCLE] Daily story cap reached (${publishedToday}/${MAX_STORIES_PER_DAY}). Skipping cycle.`);
+      return { skipped: true, reason: 'daily_cap_reached', publishedToday };
+    }
+
     const { fresh, processed } = await fetchRssArticles();
     summary.fetched = fresh.length;
 
@@ -477,6 +504,20 @@ async function runNewsCycle(trigger = 'cron') {
     for (let i = 0; i < fresh.length && publishedCount < MAX_POSTS_PER_CYCLE; i++) {
       const article = fresh[i];
       console.log(`\n[CYCLE] Processing [${i + 1}/${fresh.length}]: "${article.title}"`);
+      
+      // Topic blocklist check
+      if (TOPIC_BLOCKLIST.length > 0) {
+        const isBlocked = TOPIC_BLOCKLIST.some(topic => 
+          article.title.toLowerCase().includes(topic) || (article.content || '').toLowerCase().includes(topic)
+        );
+        if (isBlocked) {
+          console.log(`[CYCLE] Skipping story matching topic blocklist: "${article.title}"`);
+          processed.add(article.link);
+          saveProcessedUrls(processed);
+          continue;
+        }
+      }
+
       try {
         summary.evaluated++;
         const result = GEMINI_API_KEY ? await evaluateWithGemini(article) : await evaluateWithGroq(article);
@@ -492,25 +533,44 @@ async function runNewsCycle(trigger = 'cron') {
         }
 
         summary.passed++;
-        console.log(`[CYCLE] PASSED - generating news card & publishing to Jonobarta website & Facebook...`);
+        console.log(`[CYCLE] PASSED - resolving 3-tier image & generating news card & publishing...`);
 
-        // 1. Extract photo
-        const photoUrl = await extractEditorialPhoto(article.link);
+        // 1. 3-Tier Image Pipeline
+        const imageResult = await resolveArticleImage(article, result.category || 'জাতীয়');
+        const photoUrl = imageResult.url;
 
-        // 2. Generate HD News Card (1200x630 PNG)
+        // 2. Generate HD News Card with active template (1200x630 PNG)
         let cardResult = null;
         try {
-          cardResult = await generateNewsCard({
+          cardResult = await renderNewsCard({
             title: result.title || article.title,
             snippet: result.summary || article.content || '',
-            source: article.feedTitle || 'অনলাইন ডেস্ক',
-            link: article.link
+            source: article.feedTitle || 'জনবার্তা ডেস্ক',
+            category: result.category || 'জাতীয়',
+            imageUrl: photoUrl,
+            templateId: currentActiveTemplate
           });
         } catch (cardErr) {
-          console.warn(`[CYCLE] Card generator error: ${cardErr.message}`);
+          console.warn(`[CYCLE] Card template engine error: ${cardErr.message}`);
         }
 
-        // 3. Save to Jonobarta Website Database
+        // 3. Publish to Google Blogger Blog (if configured)
+        let bloggerResult = null;
+        try {
+          bloggerResult = await publishToBlogger({
+            title: result.title || article.title,
+            summary: result.summary || article.content || '',
+            paragraphs: result.paragraphs || [article.content || ''],
+            imageUrl: photoUrl,
+            category: result.category || 'জাতীয়',
+            sourceFeed: article.feedTitle || 'জনবার্তা ডেস্ক',
+            isOriginal: false
+          });
+        } catch (bloggerErr) {
+          console.warn(`[CYCLE] Blogger publish error: ${bloggerErr.message}`);
+        }
+
+        // 4. Save to Database / Local Storage
         const savedArticle = saveArticle({
           title: result.title || article.title,
           category: result.category || 'জাতীয়',
@@ -520,16 +580,19 @@ async function runNewsCycle(trigger = 'cron') {
           rewrittenPost: result.rewrittenPost || '',
           cardUrl: cardResult?.relativeUrl || '',
           photoUrl: photoUrl || '',
+          bloggerPostUrl: bloggerResult?.postUrl || null,
+          bloggerPostId: bloggerResult?.postId || null,
+          isOriginal: false,
           sourceFeed: article.feedTitle || 'জনবার্তা ডেস্ক',
           sourceUrl: article.link,
           tags: result.tags || ['জনবার্তা', result.category || 'সংবাদ'],
           publishedAt: article.pubDate || new Date().toISOString()
         });
 
-        // 4. Send to Webhook (Make.com / Facebook) with link to our website
+        // 5. Send to Webhook (Make.com / Facebook) with Blogger / Portal link
         await sendToWebhook(article, savedArticle, cardResult);
 
-        // 5. Record recent story for cross-source dedup
+        // 6. Record recent story for cross-source dedup
         try {
           const recent = loadRecentStories(RECENT_STORIES_FILE);
           recent.push({
@@ -566,7 +629,98 @@ async function runNewsCycle(trigger = 'cron') {
     return summary;
   } finally {
     isRunning = false;
-    console.log(`[CYCLE] Cycle finished at ${new Date().toISOString()}\n`);
+    lastCycleTimestamp = new Date().toISOString();
+    console.log(`[CYCLE] Cycle finished at ${lastCycleTimestamp}\n`);
+  }
+}
+
+function countStoriesPublishedToday() {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const articles = loadArticles();
+  return articles.filter(a => new Date(a.publishedAt) >= todayStart).length;
+}
+
+/**
+ * Generate and publish original briefing or roundup
+ */
+async function publishOriginalStory(type = 'morning') {
+  console.log(`\n========================================`);
+  console.log(`[ORIGINAL-CONTENT] Running original story generator (${type}) at ${new Date().toISOString()}`);
+  console.log(`========================================`);
+
+  try {
+    const existing = loadArticles();
+    const briefingData = await generateOriginalBriefing(type, existing.slice(0, 6));
+    if (!briefingData) {
+      console.warn('[ORIGINAL-CONTENT] No recent articles available to synthesize briefing.');
+      return null;
+    }
+
+    // 1. Resolve editorial photo
+    const imageResult = await resolveArticleImage({
+      title: briefingData.title,
+      link: ''
+    }, briefingData.category || 'জাতীয়');
+    const photoUrl = imageResult.url;
+
+    // 2. Render News Card
+    let cardResult = null;
+    try {
+      cardResult = await renderNewsCard({
+        title: briefingData.title,
+        snippet: briefingData.summary,
+        source: 'জনবার্তা বিশেষ ডেস্ক',
+        category: briefingData.category || 'জাতীয়',
+        imageUrl: photoUrl,
+        templateId: currentActiveTemplate
+      });
+    } catch (cardErr) {
+      console.warn(`[ORIGINAL-CONTENT] Card rendering error: ${cardErr.message}`);
+    }
+
+    // 3. Publish to Blogger
+    let bloggerResult = null;
+    try {
+      bloggerResult = await publishToBlogger({
+        title: briefingData.title,
+        summary: briefingData.summary,
+        paragraphs: briefingData.paragraphs,
+        imageUrl: photoUrl,
+        category: briefingData.category || 'জাতীয়',
+        sourceFeed: 'জনবার্তা বিশেষ অনুসন্ধান ডেস্ক',
+        isOriginal: true
+      });
+    } catch (bloggerErr) {
+      console.warn(`[ORIGINAL-CONTENT] Blogger publish error: ${bloggerErr.message}`);
+    }
+
+    // 4. Save to Database / Local Storage
+    const savedArticle = saveArticle({
+      title: briefingData.title,
+      category: briefingData.category || 'জাতীয়',
+      summary: briefingData.summary,
+      paragraphs: briefingData.paragraphs,
+      rewrittenPost: briefingData.rewrittenPost,
+      cardUrl: cardResult?.relativeUrl || '',
+      photoUrl: photoUrl || '',
+      bloggerPostUrl: bloggerResult?.postUrl || null,
+      bloggerPostId: bloggerResult?.postId || null,
+      isOriginal: true,
+      sourceFeed: 'জনবার্তা নিজস্ব ডেস্ক',
+      sourceUrl: '',
+      tags: briefingData.tags || ['আজকের খবর', 'বিশেষ বুলেটিন', 'জনবার্তা'],
+      publishedAt: new Date().toISOString()
+    });
+
+    // 5. Send to Webhook (Make.com -> Facebook)
+    await sendToWebhook({ title: briefingData.title, feedTitle: 'জনবার্তা নিজস্ব ডেস্ক' }, savedArticle, cardResult);
+
+    console.log(`[ORIGINAL-CONTENT] Successfully published original ${type} briefing: "${briefingData.title}"`);
+    return savedArticle;
+  } catch (err) {
+    console.error(`[ORIGINAL-CONTENT] Failed to generate/publish ${type} briefing:`, err.message);
+    return null;
   }
 }
 
@@ -660,17 +814,73 @@ app.get(['/rss', '/feed.xml'], (req, res) => {
 // -------------------------------------------------------------
 
 app.get('/health', (req, res) => {
+  const articles = loadArticles();
+  const originality = calculateOriginalityRatio(articles);
+  console.log(`[HEALTH] Health check ping received at ${new Date().toISOString()}`);
   res.json({
     status: 'ok',
     brand: 'Jonobarta (জনবার্তা)',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
-    feeds: RSS_FEED_URLS.length
+    lastCycleTime: lastCycleTimestamp,
+    storiesPublishedToday: countStoriesPublishedToday(),
+    originalityRatio: originality.ratio,
+    originalStoriesCount: originality.original,
+    totalArticles: articles.length,
+    bloggerConfigured: isBloggerConfigured(),
+    activeCardTemplate: currentActiveTemplate,
+    feedsCount: RSS_FEED_URLS.length
   });
 });
 
 app.get('/ping', (req, res) => {
-  res.json({ status: 'alive', brand: 'Jonobarta', timestamp: new Date().toISOString() });
+  const now = new Date().toISOString();
+  console.log(`[PING] Keep-alive heartbeat received at ${now} (uptime: ${Math.round(process.uptime())}s)`);
+  res.json({
+    status: 'alive',
+    brand: 'Jonobarta',
+    timestamp: now,
+    uptime: process.uptime()
+  });
+});
+
+app.get('/templates', (req, res) => {
+  res.json({
+    activeTemplate: currentActiveTemplate,
+    availableTemplates: getAvailableTemplates()
+  });
+});
+
+app.post('/template', (req, res) => {
+  const target = req.body?.template || req.body?.templateId;
+  const available = getAvailableTemplates();
+  if (!target || !available[target]) {
+    return res.status(400).json({
+      error: 'Invalid template ID',
+      available: Object.keys(available)
+    });
+  }
+  currentActiveTemplate = target;
+  console.log(`[CARD-ENGINE] Active template dynamically switched to: ${currentActiveTemplate}`);
+  res.json({
+    success: true,
+    activeTemplate: currentActiveTemplate,
+    message: `Active card template updated to '${currentActiveTemplate}' for subsequent stories`
+  });
+});
+
+app.get('/template/:name', (req, res) => {
+  const target = req.params.name;
+  const available = getAvailableTemplates();
+  if (!available[target]) {
+    return res.status(404).json({
+      error: `Template '${target}' not found`,
+      available: Object.keys(available)
+    });
+  }
+  currentActiveTemplate = target;
+  console.log(`[CARD-ENGINE] Active template switched to: ${currentActiveTemplate}`);
+  res.json({ success: true, activeTemplate: currentActiveTemplate });
 });
 
 app.get('/trigger', async (req, res) => {
@@ -688,6 +898,18 @@ app.post('/trigger', async (req, res) => {
   runNewsCycle('webhook').catch(e => console.error(e));
 });
 
+app.get('/trigger/briefing', async (req, res) => {
+  const type = req.query.type === 'evening' ? 'evening' : 'morning';
+  console.log(`[TRIGGER] Manual original ${type} briefing requested from ${req.ip}`);
+  res.json({
+    message: `Jonobarta original ${type} briefing started`,
+    brand: 'Jonobarta',
+    type,
+    startedAt: new Date().toISOString()
+  });
+  publishOriginalStory(type).catch(e => console.error(e));
+});
+
 app.get('/status', (req, res) => {
   const processed = loadProcessedUrls();
   const recentStories = loadRecentStories(RECENT_STORIES_FILE);
@@ -695,19 +917,28 @@ app.get('/status', (req, res) => {
   const cardsCount = fs.existsSync(CARDS_DIR)
     ? fs.readdirSync(CARDS_DIR).filter(f => f.endsWith('.png')).length
     : 0;
+  const originality = calculateOriginalityRatio(articles);
 
   res.json({
     status: 'ok',
     brand: 'Jonobarta (জনবার্তা)',
     website: 'https://daily-news-harness.onrender.com',
     publishedArticlesCount: articles.length,
+    storiesPublishedToday: countStoriesPublishedToday(),
+    originalityRatio: originality.ratio,
+    originalStoriesCount: originality.original,
     cardsGenerated: cardsCount,
+    activeCardTemplate: currentActiveTemplate,
+    availableTemplates: Object.keys(getAvailableTemplates()),
     processedRssCount: processed.size,
     recentStoriesCount: recentStories.length,
     llmConfigured: !!(GEMINI_API_KEY || GROQ_API_KEY),
+    bloggerConfigured: isBloggerConfigured(),
     webhookConfigured: !!PABBLY_WEBHOOK_URL,
     cronSchedule: CRON_SCHEDULE,
-    maxPostsPerCycle: MAX_POSTS_PER_CYCLE
+    maxPostsPerCycle: MAX_POSTS_PER_CYCLE,
+    maxStoriesPerDay: MAX_STORIES_PER_DAY,
+    agentIntervalMinutes: AGENT_INTERVAL_MINUTES
   });
 });
 
@@ -722,10 +953,13 @@ app.get('/audit', async (req, res) => {
       llmProvider: GEMINI_API_KEY ? 'Gemini' : GROQ_API_KEY ? 'Groq' : 'NONE',
       groqModel: GROQ_MODEL,
       webhookConfigured: !!PABBLY_WEBHOOK_URL,
+      bloggerConfigured: isBloggerConfigured(),
+      activeCardTemplate: currentActiveTemplate,
       cronSchedule: CRON_SCHEDULE,
       holdPosting: process.env.HOLD_POSTING === 'true'
     },
     articlesInPortal: loadArticles().length,
+    originalityRatio: calculateOriginalityRatio(loadArticles()).ratio,
     feeds: []
   };
 
@@ -761,24 +995,49 @@ if (require.main === module) {
     console.log(`\n========================================`);
     console.log(`[JONOBARTA] Daily News Engine & Web Portal running on port ${PORT}`);
     console.log(`[CONFIG] Webhook URL configured: ${maskedWebhook}`);
+    console.log(`[CONFIG] Blogger Publishing: ${isBloggerConfigured() ? 'CONFIGURED' : 'DRY-RUN / LOCAL PORTAL'}`);
+    console.log(`[CONFIG] Active News Card Template: ${currentActiveTemplate}`);
     console.log(`[JONOBARTA] Portal Homepage: http://localhost:${PORT}/`);
     console.log(`[JONOBARTA] RSS Feed: http://localhost:${PORT}/rss`);
     console.log(`[JONOBARTA] Health: http://localhost:${PORT}/health`);
     console.log(`[JONOBARTA] Trigger: http://localhost:${PORT}/trigger`);
     console.log(`[JONOBARTA] Status: http://localhost:${PORT}/status`);
+    console.log(`[JONOBARTA] Templates: http://localhost:${PORT}/templates`);
     console.log(`[JONOBARTA] Audit: http://localhost:${PORT}/audit`);
     console.log(`========================================\n`);
 
+    // 1. Regular News Cycle Cron
     cron.schedule(CRON_SCHEDULE, () => {
       console.log(`[CRON] Triggered scheduled run at ${new Date().toISOString()}`);
       runNewsCycle('cron').catch(err => console.error('[CRON] Error:', err.message));
     });
+    console.log(`[CRON] Scheduled Main Cycle: ${CRON_SCHEDULE}`);
 
-    console.log(`[CRON] Scheduled: ${CRON_SCHEDULE}`);
+    // 2. Morning Briefing Cron at 01:00 UTC (07:00 BST)
+    cron.schedule('0 1 * * *', () => {
+      console.log(`[CRON] Triggered Morning Briefing (07:00 BST) at ${new Date().toISOString()}`);
+      publishOriginalStory('morning').catch(err => console.error('[CRON] Morning Briefing error:', err.message));
+    });
+    console.log(`[CRON] Scheduled Morning Briefing: 0 1 * * * (07:00 BST)`);
+
+    // 3. Evening Roundup Cron at 15:00 UTC (21:00 BST)
+    cron.schedule('0 15 * * *', () => {
+      console.log(`[CRON] Triggered Evening Roundup (21:00 BST) at ${new Date().toISOString()}`);
+      publishOriginalStory('evening').catch(err => console.error('[CRON] Evening Roundup error:', err.message));
+    });
+    console.log(`[CRON] Scheduled Evening Roundup: 0 15 * * * (21:00 BST)`);
   });
 }
 
 process.on('unhandledRejection', (err) => console.error('[UNHANDLED]', err));
 process.on('uncaughtException', (err) => console.error('[UNCAUGHT]', err));
 
-module.exports = { app, runNewsCycle, fetchRssArticles, evaluateWithGroq, evaluateWithGemini };
+module.exports = {
+  app,
+  runNewsCycle,
+  publishOriginalStory,
+  countStoriesPublishedToday,
+  fetchRssArticles,
+  evaluateWithGroq,
+  evaluateWithGemini
+};
