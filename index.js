@@ -38,7 +38,7 @@ if (fs.existsSync(cloudConfigFile)) {
   }
 }
 
-const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || cloudConfig.RSS_FEED_URLS || 'https://www.dailyamardesh.com/feed,https://www.prothomalo.com/feed,https://feeds.bbci.co.uk/bengali/rss.xml,https://www.thedailystar.net/news/bangladesh/rss.xml,https://www.ntvbd.com/rss.xml,https://www.channelionline.com/feed,https://www.jugantor.com/feed,https://www.banglatribune.com/feed')
+const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || cloudConfig.RSS_FEED_URLS || 'https://www.dailyamardesh.com/feed,https://www.prothomalo.com/feed,https://feeds.bbci.co.uk/bengali/rss.xml,https://www.thedailystar.net/news/bangladesh/rss.xml,https://www.ntvbd.com/rss.xml,https://www.channelionline.com/feed,https://bd24live.com/bangla/feed,https://www.tbsnews.net/rss.xml')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
@@ -586,7 +586,8 @@ async function runNewsCycle(trigger = 'cron') {
           sourceFeed: article.feedTitle || 'জনবার্তা ডেস্ক',
           sourceUrl: article.link,
           tags: result.tags || ['জনবার্তা', result.category || 'সংবাদ'],
-          publishedAt: article.pubDate || new Date().toISOString()
+          publishedAt: new Date().toISOString(),
+          sourcePubDate: article.pubDate || new Date().toISOString()
         });
 
         // 5. Send to Webhook (Make.com / Facebook) with Blogger / Portal link
@@ -635,10 +636,19 @@ async function runNewsCycle(trigger = 'cron') {
 }
 
 function countStoriesPublishedToday() {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
   const articles = loadArticles();
-  return articles.filter(a => new Date(a.publishedAt) >= todayStart).length;
+  const now = new Date();
+  const bstOffset = 6 * 60 * 60 * 1000;
+  const bstTodayStr = new Date(now.getTime() + bstOffset).toISOString().slice(0, 10);
+  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+  return articles.filter(a => {
+    if (!a.publishedAt) return false;
+    const aDate = new Date(a.publishedAt);
+    if (isNaN(aDate.getTime())) return false;
+    const aDateBstStr = new Date(aDate.getTime() + bstOffset).toISOString().slice(0, 10);
+    return aDateBstStr === bstTodayStr || aDate >= twentyFourHoursAgo;
+  }).length;
 }
 
 /**
@@ -1026,6 +1036,20 @@ if (require.main === module) {
       publishOriginalStory('evening').catch(err => console.error('[CRON] Evening Roundup error:', err.message));
     });
     console.log(`[CRON] Scheduled Evening Roundup: 0 15 * * * (21:00 BST)`);
+
+    // 4. Autonomous 4-Minute Keep-Alive Watchdog (prevents Render free-tier sleep)
+    const WATCHDOG_INTERVAL_MS = 4 * 60 * 1000;
+    const defaultPublicUrl = 'https://daily-news-harness.onrender.com';
+    const watchdogTargetUrl = `${(process.env.RENDER_EXTERNAL_URL || defaultPublicUrl).replace(/\/+$/, '')}/ping`;
+    setInterval(async () => {
+      try {
+        const pingRes = await axios.get(watchdogTargetUrl, { timeout: 10000 });
+        console.log(`[WATCHDOG] Keep-alive ping acknowledged at ${new Date().toISOString()} | status: ${pingRes.data?.status}`);
+      } catch (err) {
+        console.warn(`[WATCHDOG] Keep-alive ping notice: ${err.message}`);
+      }
+    }, WATCHDOG_INTERVAL_MS);
+    console.log(`[WATCHDOG] Keep-alive autonomous watchdog scheduled every 4 min targeting: ${watchdogTargetUrl}`);
   });
 }
 
