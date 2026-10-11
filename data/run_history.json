@@ -1,0 +1,90 @@
+[
+  {
+    "id": "run_mv3j10a",
+    "trigger": "manual",
+    "startedAt": "2026-10-11T05:03:47.596Z",
+    "completedAt": "2026-10-11T05:03:59.597Z",
+    "status": "PASS",
+    "stages": {
+      "fetch": "PASS",
+      "dedup": "PASS",
+      "eval": "PASS",
+      "sanitizer": "PASS",
+      "image": "PASS",
+      "card": "PASS",
+      "blogger": "PASS",
+      "webhook": "PASS"
+    },
+    "storyTitle": "কার্যকর সংসদ গঠনেই গণতন্ত্রের পূর্ণতা: জহির উদ্দিন স্বপনের আহ্বান",
+    "bloggerUrl": "https://jonobartaonline.blogspot.com/2026/10/blog-post_324.html",
+    "cardTemplate": "bold-headline",
+    "imageTier": 3,
+    "error": null
+  },
+  {
+    "id": "run_mv3j20b",
+    "trigger": "cron",
+    "startedAt": "2026-10-11T06:03:47.597Z",
+    "completedAt": "2026-10-11T06:03:55.597Z",
+    "status": "PASS",
+    "stages": {
+      "fetch": "PASS",
+      "dedup": "FAIL",
+      "eval": "SKIPPED",
+      "sanitizer": "SKIPPED",
+      "image": "SKIPPED",
+      "card": "SKIPPED",
+      "blogger": "SKIPPED",
+      "webhook": "SKIPPED"
+    },
+    "storyTitle": "বাংলাদেশ ব্যাংকের গভর্নর আহসান এইচ মনসুরের জরুরি সংবাদ সম্মেলন",
+    "bloggerUrl": null,
+    "cardTemplate": null,
+    "imageTier": null,
+    "error": "Semantic dedup: 95.0% similarity with existing 48h story (SKIPPED)"
+  },
+  {
+    "id": "run_mv3j30c",
+    "trigger": "cron",
+    "startedAt": "2026-10-11T07:03:47.597Z",
+    "completedAt": "2026-10-11T07:03:52.597Z",
+    "status": "FAIL",
+    "stages": {
+      "fetch": "PASS",
+      "dedup": "PASS",
+      "eval": "PASS",
+      "sanitizer": "FAIL",
+      "image": "SKIPPED",
+      "card": "SKIPPED",
+      "blogger": "SKIPPED",
+      "webhook": "SKIPPED"
+    },
+    "storyTitle": "খেলাপি ঋণ আদায়ে কঠোর পদক্ষপ নিল কেন্দ্রীয় ব্যাংক",
+    "bloggerUrl": null,
+    "cardTemplate": null,
+    "imageTier": null,
+    "error": "Unicode Sanitizer: Contains U+FFFD replacement character (QUARANTINED)"
+  },
+  {
+    "id": "run_mv3j40d",
+    "trigger": "manual",
+    "startedAt": "2026-10-11T07:53:47.597Z",
+    "completedAt": "2026-10-11T07:53:59.597Z",
+    "status": "PASS",
+    "stages": {
+      "fetch": "PASS",
+      "dedup": "PASS",
+      "eval": "PASS",
+      "sanitizer": "PASS",
+      "image": "PASS",
+      "card": "PASS",
+      "blogger": "PASS",
+      "webhook": "PASS"
+    },
+    "storyTitle": "জাতীয় অর্থনীতিতে প্রবাসীদের রেমিট্যান্সের নতুন রেকর্ড",
+    "bloggerUrl": "https://jonobartaonline.blogspot.com/2026/10/blog-post_128.html",
+    "cardTemplate": "bold-headline",
+    "imageTier": 2,
+    "error": null
+  }
+]

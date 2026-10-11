@@ -127,6 +127,7 @@ async function publishToBlogger({
   try {
     const accessToken = await getAccessToken();
     const contentHtml = buildBloggerHtml({
+      title,
       summary,
       paragraphs,
       imageUrl,

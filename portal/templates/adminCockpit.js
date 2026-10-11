@@ -484,7 +484,12 @@ function renderAdminCockpit(data) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       const target = document.getElementById(panelId);
       if (target) target.classList.add('active');
-      event.target.classList.add('active');
+      if (window.event && window.event.target && window.event.target.classList) {
+        window.event.target.classList.add('active');
+      } else {
+        const btn = document.querySelector('button[onclick*="' + panelId + '"]');
+        if (btn) btn.classList.add('active');
+      }
     }
 
     async function activateTemplate(templateId) {

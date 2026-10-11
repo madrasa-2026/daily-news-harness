@@ -477,10 +477,20 @@ function getTemplateHtml(templateId, data) {
   return builder(data);
 }
 
+const TEMPLATE_METADATA = {
+  'bold-headline': { name: 'বোল্ড হেডলাইন', desc: 'লাল ব্যাকগ্রাউন্ড ও আকর্ষণীয় বড় ফন্ট' },
+  'image-dominant': { name: 'ছবি প্রাধান্য', desc: 'ফুল-সাইজ ব্যাকগ্রাউন্ড ফটো ও ওভারলে' },
+  'minimal': { name: 'মিনিমাল ক্লিন', desc: 'সাদা ব্যাকগ্রাউন্ড ও ঝকঝকে পরিপাটি স্টাইল' },
+  'breaking-news': { name: 'ব্রেকিং নিউজ', desc: 'ডার্ক গ্লসি ও স্পিড অ্যাকসেন্ট' },
+  'quote-style': { name: 'উদ্ধৃতি স্টাইল', desc: 'উদ্ধৃতি চিহ্নে হাইলাইট করা স্টেটমেন্ট' },
+  'dark-premium': { name: 'ডার্ক প্রিমিয়াম', desc: 'গাঢ় ব্যাকগ্রাউন্ড ও গোল্ডেন এক্সক্লুসিভ ব্যাজ' }
+};
+
 function getAvailableTemplates() {
   const templates = {};
   for (const id of Object.keys(TEMPLATE_BUILDERS)) {
-    templates[id] = { id, source: 'builtin' };
+    const meta = TEMPLATE_METADATA[id] || { name: id, desc: '' };
+    templates[id] = { id, name: meta.name, desc: meta.desc, source: 'builtin' };
   }
   return templates;
 }
@@ -618,20 +628,26 @@ function buildSvgCard({ headline, subtext, category, source, dateStr, templateId
 /**
  * Render news card using chosen template
  */
-async function renderNewsCard({
-  title,
-  snippet = '',
-  source = 'জনবার্তা ডেস্ক',
-  category = null,
-  imageUrl = null,
-  templateId = null,
-  showCommentPointer = true
-}) {
-  const activeTemplate = templateId || process.env.ACTIVE_CARD_TEMPLATE || 'bold-headline';
+async function renderNewsCard(storyData = {}, explicitTemplate = null) {
+  const {
+    title,
+    snippet = '',
+    summary = '',
+    source = 'জনবার্তা ডেস্ক',
+    category = null,
+    imageUrl = null,
+    photoUrl = null,
+    templateId = null,
+    showCommentPointer = true
+  } = storyData;
+
+  const activeTemplate = explicitTemplate || templateId || storyData.template || process.env.ACTIVE_CARD_TEMPLATE || 'bold-headline';
+  const img = imageUrl || photoUrl || null;
+  const sub = snippet || summary || '';
 
   const cleanHeadline = (title || '').replace(/["'<>]/g, '').trim();
-  const cleanSubtext = (snippet || '').replace(/["'<>]/g, '').trim();
-  const cleanCat = category || detectCategory(title + ' ' + snippet);
+  const cleanSubtext = (sub || '').replace(/["'<>]/g, '').trim();
+  const cleanCat = category || detectCategory(title + ' ' + sub);
   const dateStr = formatBengaliDate(new Date());
   const fontSize = getHeadlineFontSize(cleanHeadline.length);
 
@@ -651,7 +667,7 @@ async function renderNewsCard({
         category: cleanCat,
         source,
         dateStr,
-        bgImage: imageUrl,
+        bgImage: img,
         fontSize,
         showCommentPointer
       });
