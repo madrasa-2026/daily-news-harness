@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@500;600;700;800&family=Noto+Serif+Bengali:wght@700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Hind Siliguri', sans-serif; }
+    body {
+      width: 1200px;
+      height: 630px;
+      background-color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    /* Top Half: Real Photograph */
+    .photo-container {
+      width: 1200px;
+      height: 350px;
+      background-image: url('{{bgImage}}');
+      background-size: cover;
+      background-position: center 25%;
+      position: relative;
+      background-color: #1e293b;
+    }
+    
+    .category-badge {
+      position: absolute;
+      top: 20px;
+      left: 36px;
+      background: #d61f2c;
+      color: #ffffff;
+      padding: 6px 18px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 19px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    
+    /* Lower Half: Light Panel */
+    .content-panel {
+      width: 1200px;
+      height: 225px;
+      background: #ffffff;
+      padding: 16px 40px 10px 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    
+    .meta-strip {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    
+    .date-label {
+      font-size: 18px;
+      font-weight: 600;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .comment-pointer {
+      font-size: 17px;
+      font-weight: 700;
+      color: #991b1b;
+      background: #fef08a;
+      padding: 4px 14px;
+      border-radius: 20px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.06);
+    }
+    
+    .headline-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+    }
+    
+    .headline {
+      font-family: 'Noto Serif Bengali', serif;
+      font-size: {{fontSize}}px;
+      font-weight: 900;
+      line-height: 1.25;
+      color: #0f172a;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      letter-spacing: -0.3px;
+    }
+    
+    /* Footer Strip: Jonobarta Brand Bar */
+    .brand-footer {
+      width: 1200px;
+      height: 55px;
+      background: #0b1120;
+      border-top: 4px solid #d61f2c;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 40px;
+    }
+    
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    
+    .logo-badge {
+      background: #d61f2c;
+      color: #ffffff;
+      font-weight: 900;
+      font-size: 18px;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    
+    .logo-text {
+      font-family: 'Noto Serif Bengali', serif;
+      color: #f8fafc;
+      font-size: 22px;
+      font-weight: 800;
+    }
+    
+    .tagline {
+      font-size: 15px;
+      font-weight: 600;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <!-- 1. Real Photograph (Top 350px) -->
+  <div class="photo-container">
+    <div class="category-badge">{{category}}</div>
+  </div>
+
+  <!-- 2. Light Panel with Meta & Headline -->
+  <div class="content-panel">
+    <div class="meta-strip">
+      <div class="date-label">📅 {{dateStr}}</div>
+      <div class="comment-pointer">📰 বিস্তারিত খবর কমেন্ট বক্সে 👇</div>
+    </div>
+    <div class="headline-wrap">
+      <h1 class="headline">{{headline}}</h1>
+    </div>
+  </div>
+
+  <!-- 3. Jonobarta Footer Strip with #d61f2c Brand Bar -->
+  <div class="brand-footer">
+    <div class="logo-group">
+      <span class="logo-badge">জ</span>
+      <span class="logo-text">জনবার্তা</span>
+    </div>
+    <div class="tagline">সত্য, ন্যায় ও জনমানুষের নির্ভীক সংবাদমাধ্যম</div>
+  </div>
+</body>
+</html>

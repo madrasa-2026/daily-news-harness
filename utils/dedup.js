@@ -149,11 +149,23 @@ function saveRecentStories(filePath, stories) {
  * 2. Semantic headline similarity > threshold (default 0.8)
  */
 function checkDuplicateStory(article, database = [], threshold = 0.8) {
+  if (!article) return { isDuplicate: false, similarity: 0 };
   const normalizedNew = normalizeUrl(article.link);
   const newTitle = article.title || '';
 
+  let list = [];
+  if (Array.isArray(database)) {
+    list = database;
+  } else if (typeof database === 'string') {
+    const secondArg = typeof threshold === 'string' ? threshold : null;
+    const realThreshold = typeof threshold === 'number' ? threshold : 0.8;
+    threshold = realThreshold;
+    list = get48hStoryDatabase(database, secondArg);
+  }
+
   // Scan database (recent_stories + 48h articles)
-  for (const item of database) {
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
     // 1. Exact URL match
     if (normalizedNew && item.normalizedUrl && item.normalizedUrl === normalizedNew) {
       return { 
@@ -165,14 +177,16 @@ function checkDuplicateStory(article, database = [], threshold = 0.8) {
     }
 
     // 2. Semantic headline similarity check
-    const sim = calculateSimilarity(newTitle, item.title);
-    if (sim >= threshold) {
-      return {
-        isDuplicate: true,
-        similarity: Math.round(sim * 100) / 100,
-        matchedTitle: item.title,
-        reason: `Headline ${(sim * 100).toFixed(1)}% semantically identical to 48h story: "${item.title}"`
-      };
+    if (item.title) {
+      const sim = calculateSimilarity(newTitle, item.title);
+      if (sim >= threshold) {
+        return {
+          isDuplicate: true,
+          similarity: Math.round(sim * 100) / 100,
+          matchedTitle: item.title,
+          reason: `Headline ${(sim * 100).toFixed(1)}% semantically identical to 48h story: "${item.title}"`
+        };
+      }
     }
   }
 

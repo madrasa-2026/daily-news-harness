@@ -15,7 +15,8 @@ const { renderHome } = require('./portal/templates/home');
 const { renderArticle } = require('./portal/templates/article');
 const { renderCategory } = require('./portal/templates/category');
 const { renderTemplatesPage } = require('./portal/templates/templatesPreview');
-const { validateStoryEditorial, quarantineStory, buildCleanFacebookCaption } = require('./utils/editorialGuards');
+const { validateStoryEditorial, quarantineStory, buildCleanFacebookCaption, ensureMinimumParagraphs, resolveBengaliAttribution } = require('./utils/editorialGuards');
+const { rankCandidates, scoreStory, checkBreakingNews, isInternationalStory } = require('./utils/rankingEngine');
 const { startRunTracker, getRecentRuns, getLogTail, appendLog } = require('./utils/runTracker');
 const { renderAdminLoginPage, renderAdminCockpit } = require('./portal/templates/adminCockpit');
 
@@ -42,10 +43,6 @@ if (fs.existsSync(cloudConfigFile)) {
   }
 }
 
-const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || cloudConfig.RSS_FEED_URLS || 'https://www.dailyamardesh.com/feed,https://www.prothomalo.com/feed,https://feeds.bbci.co.uk/bengali/rss.xml,https://www.thedailystar.net/news/bangladesh/rss.xml,https://www.ntvbd.com/rss.xml,https://www.channelionline.com/feed,https://bd24live.com/bangla/feed,https://www.tbsnews.net/rss.xml')
-  .split(',')
-  .map(s => s.trim())
-  .filter(Boolean);
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || cloudConfig.GEMINI_API_KEY || '';
 const GROQ_API_KEY = process.env.GROQ_API_KEY || cloudConfig.GROQ_API_KEY || '';
 const GROQ_MODEL = process.env.GROQ_MODEL || cloudConfig.GROQ_MODEL || 'openai/gpt-oss-120b';
@@ -78,19 +75,24 @@ function isAdminAuthenticated(req) {
   return cookies.jonobarta_admin_session === expectedToken;
 }
 
-// Managed RSS feed list with health flags
+// Managed RSS feed list with priority order and health flags
 let MANAGED_FEEDS = [
-  { id: 'dailyamardesh', name: 'দৈনিক আমার দেশ', url: 'https://www.dailyamardesh.com/feed', enabled: true, isBroken: false },
-  { id: 'prothomalo', name: 'প্রথম আলো', url: 'https://www.prothomalo.com/feed', enabled: true, isBroken: false },
-  { id: 'bbcbangla', name: 'বিবিসি বাংলা', url: 'https://feeds.bbci.co.uk/bengali/rss.xml', enabled: true, isBroken: false },
-  { id: 'dailystar', name: 'দ্য ডেইলি স্টার', url: 'https://www.thedailystar.net/news/bangladesh/rss.xml', enabled: true, isBroken: false },
-  { id: 'ntvbd', name: 'এনটিভি অনলাইন', url: 'https://www.ntvbd.com/rss.xml', enabled: true, isBroken: false },
-  { id: 'channeli', name: 'চ্যানেল আই অনলাইন', url: 'https://www.channelionline.com/feed', enabled: true, isBroken: false },
-  { id: 'bd24live', name: 'বিডি২৪লাইভ', url: 'https://bd24live.com/bangla/feed', enabled: true, isBroken: false },
-  { id: 'tbsnews', name: 'দ্য বিজনেস স্ট্যান্ডার্ড', url: 'https://www.tbsnews.net/rss.xml', enabled: true, isBroken: false },
-  { id: 'jugantor', name: 'দৈনিক যুগান্তর (404 Broken)', url: 'https://www.jugantor.com/feed', enabled: false, isBroken: true },
-  { id: 'banglatribune', name: 'বাংলা ট্রিবিউন (404 Broken)', url: 'https://www.banglatribune.com/feed', enabled: false, isBroken: true }
+  { id: 'ntvbd', name: 'এনটিভি অনলাইন', url: 'https://www.ntvbd.com/rss.xml', enabled: true, isBroken: false, priority: 1 },
+  { id: 'jamunatv', name: 'যমুনা টেলিভিশন', url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCN6sm8iHiPd0cnoUardDAnw', enabled: true, isBroken: false, priority: 1 },
+  { id: 'channeli', name: 'চ্যানেল আই অনলাইন', url: 'https://www.channelionline.com/feed', enabled: true, isBroken: false, priority: 1 },
+  { id: 'bbcbangla', name: 'বিবিসি বাংলা', url: 'https://feeds.bbci.co.uk/bengali/rss.xml', enabled: true, isBroken: false, priority: 2 },
+  { id: 'voabangla', name: 'ভয়েস অব আমেরিকা (VOA বাংলা)', url: 'https://www.voabangla.com/api/z_rgvl-vomx-tpevt-t', enabled: true, isBroken: false, priority: 2 },
+  { id: 'dailyamardesh', name: 'দৈনিক আমার দেশ', url: 'https://www.dailyamardesh.com/feed', enabled: true, isBroken: false, priority: 2 },
+  { id: 'tbsnews', name: 'দ্য বিজনেস স্ট্যান্ডার্ড', url: 'https://www.tbsnews.net/rss.xml', enabled: true, isBroken: false, priority: 2 },
+  { id: 'prothomalo', name: 'প্রথম আলো', url: 'https://www.prothomalo.com/feed', enabled: true, isBroken: false, priority: 3 },
+  { id: 'dailystar', name: 'দ্য ডেইলি স্টার', url: 'https://www.thedailystar.net/news/bangladesh/rss.xml', enabled: true, isBroken: false, priority: 3 },
+  { id: 'bd24live', name: 'বিডি২৪লাইভ', url: 'https://bd24live.com/bangla/feed', enabled: true, isBroken: false, priority: 3 }
 ];
+
+const RSS_FEED_URLS = (process.env.RSS_FEED_URLS || cloudConfig.RSS_FEED_URLS || MANAGED_FEEDS.map(f => f.url).join(','))
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
 
 const CRON_SCHEDULE = process.env.CRON_SCHEDULE || cloudConfig.CRON_SCHEDULE || 
   (AGENT_INTERVAL_MINUTES === 60 ? '0 * * * *' : 
@@ -99,6 +101,8 @@ const CRON_SCHEDULE = process.env.CRON_SCHEDULE || cloudConfig.CRON_SCHEDULE ||
 const DATA_DIR = path.join(__dirname, 'data');
 const PROCESSED_FILE = path.join(DATA_DIR, 'processed.json');
 const RECENT_STORIES_FILE = path.join(DATA_DIR, 'recent_stories.json');
+const PIPELINE_LOCK_FILE = path.join(DATA_DIR, 'pipeline.lock');
+const LOCK_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes max lock duration
 
 const parser = new Parser({
   timeout: 8000,
@@ -108,6 +112,65 @@ const parser = new Parser({
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   console.log(`[INIT] Created data directory at ${DATA_DIR}`);
+}
+
+// Webhook dispatch tracking state
+let lastDispatch = {
+  time: null,
+  statusCode: null,
+  error: null,
+  durationMs: null,
+  title: null
+};
+let consecutiveWebhookFailures = 0;
+
+/**
+ * Acquire file-based pipeline run lock to strictly prevent overlapping runs and double-posting
+ */
+function acquireRunLock(trigger = 'manual') {
+  try {
+    if (fs.existsSync(PIPELINE_LOCK_FILE)) {
+      try {
+        const raw = fs.readFileSync(PIPELINE_LOCK_FILE, 'utf8');
+        const lock = JSON.parse(raw);
+        const ageMs = Date.now() - (lock.timestamp || 0);
+        if (ageMs < LOCK_MAX_AGE_MS) {
+          console.warn(`[LOCK] Active run lock held by PID ${lock.pid || 'unknown'} (${Math.round(ageMs / 1000)}s old, trigger: ${lock.trigger || 'unknown'}). Overlapping cycle aborted.`);
+          return false;
+        } else {
+          console.warn(`[LOCK] Stale lock detected (${Math.round(ageMs / 1000)}s old). Releasing stale lock.`);
+        }
+      } catch (parseErr) {
+        console.warn('[LOCK] Malformed lock file encountered, resetting lock:', parseErr.message);
+      }
+    }
+    const lockData = {
+      pid: process.pid,
+      timestamp: Date.now(),
+      trigger,
+      startedAt: new Date().toISOString()
+    };
+    fs.writeFileSync(PIPELINE_LOCK_FILE, JSON.stringify(lockData, null, 2), 'utf8');
+    console.log(`[LOCK] Acquired pipeline run lock for trigger: ${trigger} (PID: ${process.pid})`);
+    return true;
+  } catch (err) {
+    console.error('[LOCK] Failed to acquire run lock:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Release file-based pipeline run lock
+ */
+function releaseRunLock() {
+  try {
+    if (fs.existsSync(PIPELINE_LOCK_FILE)) {
+      fs.unlinkSync(PIPELINE_LOCK_FILE);
+      console.log(`[LOCK] Released pipeline run lock.`);
+    }
+  } catch (err) {
+    console.error('[LOCK] Error releasing run lock:', err.message);
+  }
 }
 
 function loadProcessedUrls() {
@@ -280,15 +343,13 @@ async function fetchRssArticles() {
     }
   }
 
-  // Sort by priorityScore, then newest first
-  fresh.sort((a, b) => b.priorityScore - a.priorityScore || new Date(b.pubDate) - new Date(a.pubDate));
-
-  const highPriorityCount = fresh.filter(f => f.priorityScore > 2).length;
-  console.log(`[FETCHER] Found ${fresh.length} total fresh articles (${highPriorityCount} with high political priority)`);
-  if (fresh.length > 0) {
-    console.log(`[FETCHER] Selected top article: "${fresh[0].title}" [Priority: ${fresh[0].priorityScore}] (${fresh[0].pubDate})`);
+  // Score and rank candidates using 0-100 News Ranking Engine
+  const { ranked, topStory, rejectedStale } = rankCandidates(fresh);
+  console.log(`[RANKING] Scored and ranked ${ranked.length} candidates (${rejectedStale.length} rejected as stale >12h)`);
+  if (topStory) {
+    console.log(`[RANKING] #1 Ranked Story: "${topStory.title}" | Score: ${topStory.score}/100 [Recency: ${topStory.recencyScore}, Imp: ${topStory.importanceScore}, Corrob: ${topStory.corroborationScore}] ${topStory.isBreaking ? '🚨 BREAKING' : ''}`);
   }
-  return { fresh, processed };
+  return { fresh: ranked, processed, topStory, rejectedStale };
 }
 
 function buildPrompt(article) {
@@ -323,9 +384,9 @@ WRITING GUIDELINES (IF PASS):
 - STRICT ZERO-VERBATIM POLICY: You must completely RESTRUCTURE and REWRITE the story in fresh, original Bengali. NEVER copy any sentence or phrase verbatim from the source snippet. Synthesize the facts into your own distinct, authoritative journalistic prose.
 - Output a clean, structured JSON with full article details:
   * "title": Punchy, original Bengali headline (max 15 words) — never copy the source headline verbatim.
-  * "category": Choose one of ["জাতীয়", "রাজনীতি", "অর্থনীতি", "আইন ও আদালত", "সংস্কার ও রাষ্ট্র", "ক্যাম্পাস ও তরুণ", "আন্তর্জাতিক"]
+  * "category": Choose one of ["জাতীয়", "রাজনীতি", "অর্থনীতি", "আইন ও আদালত", "সংস্কার ও রাষ্ট্র", "ক্যাম্পাস ও তরুণ", "আন্তর্জাতিক"] (Use "আন্তর্জাতিক" for foreign affairs and world events).
   * "summary": 1-2 sentence executive summary in your own words
-  * "paragraphs": Array of 2-3 well-written, informative paragraphs for the website article
+  * "paragraphs": Array of at least 3 substantive, well-structured journalistic paragraphs in Bengali (strictly minimum 3 substantive paragraphs required for full story)
   * "speakerQuote": Key quote from speaker or authority (if any)
   * "rewrittenPost": Viral social post text for Facebook with dynamic hook (⚡ বিশেষ প্রতিবেদন | or 🚨 ব্রেকিং নিউজ | or 📢 বড় খবর |), summary bullets, source attribution, and hashtags (#Jonobarta #BangladeshNews #Trending).
   * "tags": 3-5 relevant Bengali tags
@@ -472,11 +533,10 @@ async function sendToWebhook(article, savedArticle, cardResult) {
   const localArticleUrl = `${baseUrl}/news/${savedArticle.slug}`;
   const websiteArticleUrl = savedArticle.bloggerPostUrl || localArticleUrl;
 
-  // Resolve public image URL for Facebook - MUST BE 1200x630 NEWS CARD, NEVER RAW EDITORIAL PHOTO
-  // Guaranteed valid public CDN URL so Facebook never receives a 404 error
-  const publicImageUrl = cardResult?.cdnUrl || 'https://iili.io/nMjOGVf.png';
+  // Use card CDN or Blogger-hosted URL - NEVER fetch card images from the sleeping Render service
+  const publicImageUrl = savedArticle.bloggerImageUrl || cardResult?.cdnUrl || 'https://iili.io/nMjOGVf.png';
 
-  // Enforce zero-link caption structure without 'তথ্যসূত্র'
+  // Enforce clean zero-link Facebook caption without 'তথ্যসূত্র'
   const fbCaption = buildCleanFacebookCaption(savedArticle);
   const commentText = `📰 সম্পূর্ণ সংবাদটি পড়তে ভিজিট করুন:\n${websiteArticleUrl}\n\n#জনবার্তা`;
 
@@ -497,7 +557,7 @@ async function sendToWebhook(article, savedArticle, cardResult) {
     message: fbCaption,
     rewritten_post: fbCaption,
     content: fbCaption,
-    // Dedicated comment text for Facebook Pages Create a Comment (Module 3)
+    // Dedicated comment text for Facebook Pages Create a Comment (Module 4)
     comment_text: commentText,
     first_comment: commentText,
     // Branded 1200x630 news card (burned-in headline + logo bug)
@@ -512,25 +572,73 @@ async function sendToWebhook(article, savedArticle, cardResult) {
 
   if (!PABBLY_WEBHOOK_URL) {
     console.warn('[PUBLISH] Webhook URL not set - skipping webhook dispatch (article saved to website)');
+    lastDispatch = {
+      time: new Date().toISOString(),
+      statusCode: 200,
+      error: 'DRY_RUN_NO_WEBHOOK_URL',
+      durationMs: 0,
+      title: savedArticle.title
+    };
     return { dryRun: true };
   }
 
-  console.log(`[PUBLISH] Sending Jonobarta payload to Webhook (Make.com / Pabbly)...`);
+  console.log(`[PUBLISH] Sending Jonobarta payload to Webhook (Make.com)...`);
   console.log(`[PUBLISH] Webhook URL: ${PABBLY_WEBHOOK_URL.slice(0, 60)}...`);
   console.log(`[PUBLISH] News Card Image: ${publicImageUrl}`);
   console.log(`[PUBLISH] Blogger / Comment Target URL: ${websiteArticleUrl}`);
-  
-  try {
+
+  async function postPayload() {
+    const t0 = Date.now();
     const res = await axios.post(PABBLY_WEBHOOK_URL, payload, {
       headers: { 'Content-Type': 'application/json' },
-      timeout: 20000
+      timeout: 25000
     });
-    console.log(`[PUBLISH] Webhook Success! Status: ${res.status}`);
+    return { res, durationMs: Date.now() - t0 };
+  }
+
+  try {
+    const { res, durationMs } = await postPayload();
+    lastDispatch = {
+      time: new Date().toISOString(),
+      statusCode: res.status,
+      error: null,
+      durationMs,
+      title: savedArticle.title
+    };
+    consecutiveWebhookFailures = 0;
+    console.log(`[PUBLISH] Webhook Success! HTTP ${res.status} in ${durationMs}ms`);
     return res.data;
-  } catch (err) {
-    console.error(`[PUBLISH] Webhook Failed: ${err.message}`);
-    // Article is still published on the website!
-    return { error: err.message };
+  } catch (firstErr) {
+    const errText = firstErr.response?.data ? JSON.stringify(firstErr.response.data) : firstErr.message;
+    console.warn(`[PUBLISH] Webhook attempt 1 failed (${errText}). Retrying once after 60s delay...`);
+    
+    // Retry once after 60 seconds
+    await new Promise(r => setTimeout(r, 60000));
+    try {
+      const { res, durationMs } = await postPayload();
+      lastDispatch = {
+        time: new Date().toISOString(),
+        statusCode: res.status,
+        error: null,
+        durationMs,
+        title: savedArticle.title
+      };
+      consecutiveWebhookFailures = 0;
+      console.log(`[PUBLISH] Webhook Retry Success! HTTP ${res.status} in ${durationMs}ms`);
+      return res.data;
+    } catch (retryErr) {
+      const retryErrText = retryErr.response?.data ? JSON.stringify(retryErr.response.data) : retryErr.message;
+      consecutiveWebhookFailures++;
+      lastDispatch = {
+        time: new Date().toISOString(),
+        statusCode: retryErr.response?.status || 500,
+        error: retryErrText,
+        durationMs: null,
+        title: savedArticle.title
+      };
+      console.error(`[PUBLISH] Webhook Retry Failed (${retryErrText}). Consecutive failures: ${consecutiveWebhookFailures}`);
+      return { error: retryErrText };
+    }
   }
 }
 
@@ -541,9 +649,9 @@ async function runNewsCycle(trigger = 'cron') {
     console.log('[CYCLE] Posting is currently ON HOLD (HOLD_POSTING=true). Skipping cycle.');
     return { skipped: true, reason: 'hold_posting_enabled' };
   }
-  if (isRunning) {
-    console.log('[CYCLE] Already running, skipping duplicate trigger');
-    return { skipped: true, reason: 'already_running' };
+  if (!acquireRunLock(trigger)) {
+    console.log('[CYCLE] Active run lock held, skipping overlapping trigger to prevent double posts');
+    return { skipped: true, reason: 'run_lock_held' };
   }
   isRunning = true;
   const tracker = startRunTracker(trigger);
@@ -620,7 +728,15 @@ async function runNewsCycle(trigger = 'cron') {
         }
         tracker.setStage('eval', 'PASS');
 
-        // 2. Editorial Quality Guard (Unicode sanitizer, mojibake repair, Latin words)
+        // 2. Ensure minimum 3 substantive paragraphs
+        result.paragraphs = ensureMinimumParagraphs(result.paragraphs, result.summary);
+
+        // International category classification
+        if (article.isInternational || isInternationalStory(result.title, result.summary)) {
+          result.category = 'আন্তর্জাতিক';
+        }
+
+        // 3. Editorial Quality Guard (Unicode sanitizer, mojibake repair, Latin words, 3 paras)
         const editorialCheck = validateStoryEditorial(result);
         if (!editorialCheck.valid) {
           console.warn(`[CYCLE] EDITORIAL SANITIZER REJECTED: ${editorialCheck.reason}`);
@@ -633,38 +749,39 @@ async function runNewsCycle(trigger = 'cron') {
         summary.passed++;
         console.log(`[CYCLE] PASSED - resolving 3-tier image & generating news card & publishing...`);
 
-        // 3. 3-Tier Image Pipeline
+        // 4. 3-Tier Image Pipeline (Strict watermark rejection)
         const imageResult = await resolveArticleImage(article, result.category || 'জাতীয়');
         const photoUrl = imageResult.url;
         tracker.setStage('image', 'PASS', `Tier: ${imageResult.tier || 1}`);
 
-        // 4. Generate HD News Card with active template (1200x630 PNG)
+        // 5. Generate HD News Card with active or breaking template (1200x630 PNG)
+        const templateToUse = article.isBreaking ? 'breaking-news' : currentActiveTemplate;
         let cardResult = null;
         try {
           cardResult = await renderNewsCard({
             title: result.title || article.title,
             snippet: result.summary || article.content || '',
-            source: article.feedTitle || 'জনবার্তা ডেস্ক',
+            source: resolveBengaliAttribution(article.feedTitle || 'জনবার্তা ডেস্ক'),
             category: result.category || 'জাতীয়',
             imageUrl: photoUrl,
-            templateId: currentActiveTemplate
+            templateId: templateToUse
           });
-          tracker.setStage('card', 'PASS', currentActiveTemplate);
+          tracker.setStage('card', 'PASS', templateToUse);
         } catch (cardErr) {
           console.warn(`[CYCLE] Card template engine error: ${cardErr.message}`);
           tracker.setStage('card', 'FAIL', cardErr.message);
         }
 
-        // 5. Publish to Google Blogger Blog (if configured)
+        // 6. Publish to Google Blogger Blog (if configured)
         let bloggerResult = null;
         try {
           bloggerResult = await publishToBlogger({
             title: result.title || article.title,
             summary: result.summary || article.content || '',
             paragraphs: result.paragraphs || [article.content || ''],
-            imageUrl: photoUrl,
+            imageUrl: cardResult?.cdnUrl || photoUrl,
             category: result.category || 'জাতীয়',
-            sourceFeed: article.feedTitle || 'জনবার্তা ডেস্ক',
+            sourceFeed: resolveBengaliAttribution(article.feedTitle || 'জনবার্তা ডেস্ক'),
             isOriginal: false
           });
           tracker.setStage('blogger', bloggerResult ? 'PASS' : 'SKIPPED');
@@ -673,7 +790,7 @@ async function runNewsCycle(trigger = 'cron') {
           tracker.setStage('blogger', 'FAIL', bloggerErr.message);
         }
 
-        // 6. Save to Database / Local Storage
+        // 7. Save to Database / Local Storage
         const savedArticle = saveArticle({
           title: result.title || article.title,
           category: result.category || 'জাতীয়',
@@ -685,8 +802,9 @@ async function runNewsCycle(trigger = 'cron') {
           photoUrl: photoUrl || '',
           bloggerPostUrl: bloggerResult?.postUrl || null,
           bloggerPostId: bloggerResult?.postId || null,
+          bloggerImageUrl: bloggerResult?.imageUrl || cardResult?.cdnUrl || photoUrl,
           isOriginal: true, // 100% original rewritten journalism without verbatim copying
-          sourceFeed: article.feedTitle || 'জনবার্তা ডেস্ক',
+          sourceFeed: resolveBengaliAttribution(article.feedTitle || 'জনবার্তা ডেস্ক'),
           sourceUrl: article.link,
           tags: result.tags || ['জনবার্তা', result.category || 'সংবাদ'],
           publishedAt: new Date().toISOString(),
@@ -694,12 +812,12 @@ async function runNewsCycle(trigger = 'cron') {
         });
         sessionStoriesPublishedToday++;
 
-        // 7. Send to Webhook (Make.com / Facebook) with Blogger / Portal link
+        // 8. Send to Webhook (Make.com / Facebook) with Blogger / Portal link
         await sendToWebhook(article, savedArticle, cardResult);
         tracker.setStage('webhook', 'PASS');
         tracker.setStory(savedArticle.title, savedArticle.bloggerPostUrl, cardResult?.cdnUrl);
 
-        // 8. Record recent story for cross-source dedup
+        // 9. Record recent story for cross-source dedup
         try {
           const recent = loadRecentStories(RECENT_STORIES_FILE);
           recent.push({
@@ -737,6 +855,7 @@ async function runNewsCycle(trigger = 'cron') {
     summary.errors++;
     return summary;
   } finally {
+    releaseRunLock();
     isRunning = false;
     lastCycleTimestamp = new Date().toISOString();
     console.log(`[CYCLE] Cycle finished at ${lastCycleTimestamp}\n`);
@@ -1064,11 +1183,19 @@ app.get('/status', async (req, res) => {
   const articles = loadArticles();
   const cardsCount = getGeneratedCardsCount();
   const originality = calculateOriginalityRatio(articles);
+  const isLockActive = fs.existsSync(PIPELINE_LOCK_FILE);
 
   res.json({
     status: 'ok',
     brand: 'Jonobarta (জনবার্তা)',
     website: 'https://daily-news-harness.onrender.com',
+    lastDispatch,
+    facebookLegDown: consecutiveWebhookFailures >= 3,
+    consecutiveWebhookFailures,
+    runLock: {
+      isLocked: isLockActive,
+      lockFile: PIPELINE_LOCK_FILE
+    },
     publishedArticlesCount: articles.length,
     storiesPublishedToday: countStoriesPublishedToday(),
     originalityRatio: originality.ratio,
@@ -1089,6 +1216,7 @@ app.get('/status', async (req, res) => {
 });
 
 app.get('/audit', async (req, res) => {
+  const activeFeeds = MANAGED_FEEDS.filter(f => f.enabled !== false);
   const auditResults = {
     brand: 'Jonobarta (জনবার্তা)',
     timestamp: new Date().toISOString(),
@@ -1106,25 +1234,34 @@ app.get('/audit', async (req, res) => {
     },
     articlesInPortal: loadArticles().length,
     originalityRatio: calculateOriginalityRatio(loadArticles()).ratio,
+    feedsCount: activeFeeds.length,
+    allFeedsHealthy: true,
     feeds: []
   };
 
-  for (const url of RSS_FEED_URLS) {
+  for (const feedItem of activeFeeds) {
     const t0 = Date.now();
     try {
-      const feed = await parser.parseURL(url);
+      const feed = await parser.parseURL(feedItem.url);
       const firstTitle = feed.items.length > 0 ? extractItemTitle(feed.items[0]) : '';
       auditResults.feeds.push({
-        url,
+        id: feedItem.id,
+        name: feedItem.name,
+        url: feedItem.url,
+        priority: feedItem.priority || 2,
         status: 'OK',
-        title: feed.title || 'Untitled',
+        title: feed.title || feedItem.name,
         itemsCount: feed.items.length,
         latencyMs: Date.now() - t0,
         sampleItemTitle: firstTitle.slice(0, 60)
       });
     } catch (e) {
+      auditResults.allFeedsHealthy = false;
       auditResults.feeds.push({
-        url,
+        id: feedItem.id,
+        name: feedItem.name,
+        url: feedItem.url,
+        priority: feedItem.priority || 2,
         status: 'FAILED',
         error: e.message,
         latencyMs: Date.now() - t0

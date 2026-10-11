@@ -173,9 +173,52 @@ function scanAndCleanLatinWords(text = '') {
 }
 
 /**
+ * Ensure article contains at least 3 substantive paragraphs by intelligently splitting or expanding
+ */
+function ensureMinimumParagraphs(paragraphs = [], summary = '') {
+  let list = Array.isArray(paragraphs) ? [...paragraphs.filter(p => typeof p === 'string' && p.trim())] : [];
+  if (typeof paragraphs === 'string' && paragraphs.trim()) {
+    list = paragraphs.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  }
+
+  if (list.length >= 3) return list;
+
+  const expanded = [];
+  for (const para of list) {
+    const sentences = para.split(/(?<=[।?!])\s+/).filter(s => s.trim().length > 15);
+    if (sentences.length >= 2 && (expanded.length + (list.length - 1)) < 3) {
+      const mid = Math.ceil(sentences.length / 2);
+      expanded.push(sentences.slice(0, mid).join(' '));
+      expanded.push(sentences.slice(mid).join(' '));
+    } else {
+      expanded.push(para);
+    }
+  }
+
+  if (expanded.length < 3 && summary && summary.trim()) {
+    if (!expanded.some(p => p.includes(summary.trim().slice(0, 30)))) {
+      expanded.unshift(summary.trim());
+    }
+  }
+
+  return expanded;
+}
+
+/**
  * Validate entire article for editorial publishing
  */
 function validateStoryEditorial(article) {
+  // Check minimum 3 substantive paragraphs
+  const paras = Array.isArray(article.paragraphs)
+    ? article.paragraphs.filter(p => typeof p === 'string' && p.trim().length > 15)
+    : [];
+  if (paras.length < 3) {
+    return {
+      valid: false,
+      reason: `Story has only ${paras.length} substantive paragraphs (minimum 3 substantive paragraphs required)`
+    };
+  }
+
   const fieldsToCheck = [
     { name: 'title', val: article.title },
     { name: 'summary', val: article.summary },
@@ -241,6 +284,7 @@ module.exports = {
   scanAndCleanLatinWords,
   validateStoryEditorial,
   buildCleanFacebookCaption,
+  ensureMinimumParagraphs,
   BENGALI_OUTLET_MAP,
   LATIN_WORD_TRANSLATIONS,
   QUARANTINE_FILE

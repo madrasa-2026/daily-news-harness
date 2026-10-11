@@ -166,6 +166,7 @@ async function publishToBlogger({
       success: true,
       postId: postData.id,
       postUrl: postData.url,
+      imageUrl: (postData.images && postData.images[0]?.url) || imageUrl,
       publishedAt: postData.published
     };
   } catch (err) {

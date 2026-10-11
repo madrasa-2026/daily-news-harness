@@ -463,13 +463,159 @@ function templateDarkPremium({ headline, subtext, category, source, dateStr, fon
 
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates');
 
+// 7. Photo-Dominant (NTV-Style)
+function templatePhotoDominant({ headline, subtext, category, source, dateStr, bgImage, fontSize = 44, showCommentPointer = true }) {
+  const photo = bgImage || 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80';
+  return `<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@500;600;700;800&family=Noto+Serif+Bengali:wght@700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Hind Siliguri', sans-serif; }
+    body {
+      width: 1200px;
+      height: 630px;
+      background-color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .photo-container {
+      width: 1200px;
+      height: 350px;
+      background-image: url('${photo}');
+      background-size: cover;
+      background-position: center 25%;
+      position: relative;
+      background-color: #1e293b;
+    }
+    .category-badge {
+      position: absolute;
+      top: 20px;
+      left: 36px;
+      background: #d61f2c;
+      color: #ffffff;
+      padding: 6px 18px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 19px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    .content-panel {
+      width: 1200px;
+      height: 225px;
+      background: #ffffff;
+      padding: 16px 40px 10px 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .meta-strip {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .date-label {
+      font-size: 18px;
+      font-weight: 600;
+      color: #64748b;
+    }
+    .comment-pointer {
+      font-size: 17px;
+      font-weight: 700;
+      color: #991b1b;
+      background: #fef08a;
+      padding: 4px 14px;
+      border-radius: 20px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.06);
+    }
+    .headline-wrap {
+      flex: 1;
+      display: flex;
+      align-items: center;
+    }
+    .headline {
+      font-family: 'Noto Serif Bengali', serif;
+      font-size: ${Math.min(fontSize, 46)}px;
+      font-weight: 900;
+      line-height: 1.25;
+      color: #0f172a;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      letter-spacing: -0.3px;
+    }
+    .brand-footer {
+      width: 1200px;
+      height: 55px;
+      background: #0b1120;
+      border-top: 4px solid #d61f2c;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 40px;
+    }
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-badge {
+      background: #d61f2c;
+      color: #ffffff;
+      font-weight: 900;
+      font-size: 18px;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .logo-text {
+      font-family: 'Noto Serif Bengali', serif;
+      color: #f8fafc;
+      font-size: 22px;
+      font-weight: 800;
+    }
+    .tagline {
+      font-size: 15px;
+      font-weight: 600;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div class="photo-container">
+    <div class="category-badge">${category || 'জাতীয়'}</div>
+  </div>
+  <div class="content-panel">
+    <div class="meta-strip">
+      <div class="date-label">📅 ${dateStr}</div>
+      ${showCommentPointer ? `<div class="comment-pointer">📰 বিস্তারিত খবর কমেন্ট বক্সে 👇</div>` : ''}
+    </div>
+    <div class="headline-wrap">
+      <h1 class="headline">${headline}</h1>
+    </div>
+  </div>
+  <div class="brand-footer">
+    <div class="logo-group">
+      <span class="logo-badge">জ</span>
+      <span class="logo-text">জনবার্তা</span>
+    </div>
+    <div class="tagline">সত্য, ন্যায় ও জনমানুষের নির্ভীক সংবাদমাধ্যম</div>
+  </div>
+</body>
+</html>`;
+}
+
 const TEMPLATE_BUILDERS = {
   'bold-headline': templateBoldHeadline,
   'image-dominant': templateImageDominant,
   'minimal': templateMinimal,
   'breaking-news': templateBreaking,
   'quote-style': templateQuote,
-  'dark-premium': templateDarkPremium
+  'dark-premium': templateDarkPremium,
+  'photo-dominant': templatePhotoDominant
 };
 
 function getTemplateHtml(templateId, data) {
@@ -479,7 +625,8 @@ function getTemplateHtml(templateId, data) {
 
 const TEMPLATE_METADATA = {
   'bold-headline': { name: 'বোল্ড হেডলাইন', desc: 'লাল ব্যাকগ্রাউন্ড ও আকর্ষণীয় বড় ফন্ট' },
-  'image-dominant': { name: 'ছবি প্রাধান্য', desc: 'ফুল-সাইজ ব্যাকগ্রাউন্ড ফটো ও ওভারলে' },
+  'photo-dominant': { name: 'ছবি প্রাধান্য (NTV স্টাইল)', desc: 'উপরে স্পষ্ট ছবি, নিচে লাইট প্যানেলে বড় শিরোনাম ও কমেন্ট পয়েন্টার' },
+  'image-dominant': { name: 'ছবি প্রাধান্য (ফুল ওভারলে)', desc: 'ফুল-সাইজ ব্যাকগ্রাউন্ড ফটো ও ওভারলে' },
   'minimal': { name: 'মিনিমাল ক্লিন', desc: 'সাদা ব্যাকগ্রাউন্ড ও ঝকঝকে পরিপাটি স্টাইল' },
   'breaking-news': { name: 'ব্রেকিং নিউজ', desc: 'ডার্ক গ্লসি ও স্পিড অ্যাকসেন্ট' },
   'quote-style': { name: 'উদ্ধৃতি স্টাইল', desc: 'উদ্ধৃতি চিহ্নে হাইলাইট করা স্টেটমেন্ট' },

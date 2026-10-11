@@ -56,6 +56,21 @@ const CATEGORY_KEYWORDS_EN = {
 // Outlet watermark & branded CDN signatures denylist
 // Any tier-1 candidate image matching these patterns is rejected to prevent publishing other outlets' branding
 const OUTLET_WATERMARK_SIGNATURES = [
+  // Required path segments and query params
+  'overlay=',
+  '/banner/',
+  '/watermark/',
+  '/watermarked/',
+  '/wm/',
+  'wm_',
+  '_wm',
+  'watermark',
+  'watermarked',
+  'logo_',
+  '_logo',
+  '/logo/',
+  'channeli-logo',
+  'prothomalo-logo',
   // Prothom Alo CDN & domains
   'prothomalo.com',
   'images.prothomalo.com',
@@ -63,6 +78,18 @@ const OUTLET_WATERMARK_SIGNATURES = [
   'assets.prothomalo.com',
   'palo-images',
   'palo.blob',
+  'prothomalo',
+  // NTV Online & assets
+  'ntvbd.com',
+  'media.ntvbd.com',
+  'assets.ntvbd.com',
+  'cdn.ntvbd.com',
+  'ntvbd',
+  // Channel i Online & assets
+  'channelionline.com',
+  'media.channelionline.com',
+  'channelionline',
+  'channeli',
   // Jugantor
   'jugantor.com',
   'images.jugantor.com',
@@ -75,9 +102,6 @@ const OUTLET_WATERMARK_SIGNATURES = [
   // Daily Amar Desh
   'dailyamardesh.com',
   'amardesh',
-  // Channel i & NTV
-  'channelionline.com',
-  'ntvbd.com',
   // BD24Live & TBS News
   'bd24live.com',
   'tbsnews.net',
@@ -90,16 +114,7 @@ const OUTLET_WATERMARK_SIGNATURES = [
   'ekattor.tv',
   'kalerkantho.com',
   'samakal.com',
-  'ittefaq.com.bd',
-  // Watermark keyword indicators
-  'watermark',
-  'wm_',
-  '_wm',
-  'watermarked',
-  'logo_',
-  '_logo',
-  'channeli-logo',
-  'prothomalo-logo'
+  'ittefaq.com.bd'
 ];
 
 /**
@@ -205,9 +220,11 @@ function getCategoryEditorialPhoto(category) {
 async function resolveArticleImage(article, category = 'জাতীয়') {
   // Tier 1: Source press photo
   const tier1 = await extractSourcePhoto(article);
-  if (tier1) {
+  if (tier1 && !isOutletWatermarkedImage(tier1)) {
     console.log(`[IMAGE] Tier 1 Selected (Source press photo): ${tier1.slice(0, 90)}...`);
     return { url: tier1, tier: 1, origin: 'source_feed' };
+  } else if (tier1) {
+    console.warn(`[WATERMARK-GUARD] Hard-rejected watermarked Tier 1 photo: ${tier1.slice(0, 90)}...`);
   }
 
   // Tier 2: Stock photo search
