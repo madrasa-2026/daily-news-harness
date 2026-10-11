@@ -15,7 +15,17 @@ const { renderHome } = require('./portal/templates/home');
 const { renderArticle } = require('./portal/templates/article');
 const { renderCategory } = require('./portal/templates/category');
 const { renderTemplatesPage } = require('./portal/templates/templatesPreview');
-const { validateStoryEditorial, quarantineStory, buildCleanFacebookCaption, ensureMinimumParagraphs, resolveBengaliAttribution } = require('./utils/editorialGuards');
+const { 
+  validateStoryEditorial, 
+  quarantineStory, 
+  buildCleanFacebookCaption, 
+  buildFacebookCaptionV2, 
+  ensureMinimumParagraphs, 
+  resolveBengaliAttribution,
+  isBlocklistedSource,
+  validateStoryNeutrality,
+  SOURCE_BLOCKLIST_DOMAINS
+} = require('./utils/editorialGuards');
 const { rankCandidates, scoreStory, checkBreakingNews, isInternationalStory } = require('./utils/rankingEngine');
 const { startRunTracker, getRecentRuns, getLogTail, appendLog } = require('./utils/runTracker');
 const { renderAdminLoginPage, renderAdminCockpit } = require('./portal/templates/adminCockpit');
@@ -75,17 +85,19 @@ function isAdminAuthenticated(req) {
   return cookies.jonobarta_admin_session === expectedToken;
 }
 
-// Managed RSS feed list with priority order and health flags
+// Managed RSS feed list with priority order and health flags (REVISION R2 / R2.1 Strict Allowlist)
 let MANAGED_FEEDS = [
+  // Tier 1 (Priority 1 - Checked first each cycle)
   { id: 'ntvbd', name: 'এনটিভি অনলাইন', url: 'https://www.ntvbd.com/rss.xml', enabled: true, isBroken: false, priority: 1 },
+  { id: 'channelone', name: 'চ্যানেল ওয়ান নিউজ', url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCrbWzP4kllmFMr_uWphAbXg', enabled: true, isBroken: false, priority: 1 },
   { id: 'jamunatv', name: 'যমুনা টেলিভিশন', url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCN6sm8iHiPd0cnoUardDAnw', enabled: true, isBroken: false, priority: 1 },
-  { id: 'channeli', name: 'চ্যানেল আই অনলাইন', url: 'https://www.channelionline.com/feed', enabled: true, isBroken: false, priority: 1 },
+  { id: 'dailyamardesh', name: 'দৈনিক আমার দেশ', url: 'https://www.dailyamardesh.com/feed', enabled: true, isBroken: false, priority: 1 },
+  // Tier 2 (Priority 2 - International)
   { id: 'bbcbangla', name: 'বিবিসি বাংলা', url: 'https://feeds.bbci.co.uk/bengali/rss.xml', enabled: true, isBroken: false, priority: 2 },
   { id: 'voabangla', name: 'ভয়েস অব আমেরিকা (VOA বাংলা)', url: 'https://www.voabangla.com/api/z_rgvl-vomx-tpevt-t', enabled: true, isBroken: false, priority: 2 },
-  { id: 'dailyamardesh', name: 'দৈনিক আমার দেশ', url: 'https://www.dailyamardesh.com/feed', enabled: true, isBroken: false, priority: 2 },
-  { id: 'tbsnews', name: 'দ্য বিজনেস স্ট্যান্ডার্ড', url: 'https://www.tbsnews.net/rss.xml', enabled: true, isBroken: false, priority: 2 },
-  { id: 'prothomalo', name: 'প্রথম আলো', url: 'https://www.prothomalo.com/feed', enabled: true, isBroken: false, priority: 3 },
-  { id: 'dailystar', name: 'দ্য ডেইলি স্টার', url: 'https://www.thedailystar.net/news/bangladesh/rss.xml', enabled: true, isBroken: false, priority: 3 },
+  // Tier 3 (Priority 3 - Other Bengali wires)
+  { id: 'channeli', name: 'চ্যানেল আই অনলাইন', url: 'https://www.channelionline.com/feed', enabled: true, isBroken: false, priority: 3 },
+  { id: 'tbsnews', name: 'দ্য বিজনেস স্ট্যান্ডার্ড', url: 'https://www.tbsnews.net/rss.xml', enabled: true, isBroken: false, priority: 3 },
   { id: 'bd24live', name: 'বিডি২৪লাইভ', url: 'https://bd24live.com/bangla/feed', enabled: true, isBroken: false, priority: 3 }
 ];
 
@@ -295,6 +307,20 @@ async function fetchRssArticles() {
         const pubDateStr = item.pubDate || item.isoDate || new Date().toISOString();
         if (!title) continue;
 
+        // Candidate domain logging (REVISION R2 requirement)
+        let candidateDomain = 'unknown';
+        try {
+          candidateDomain = new URL(link).hostname;
+        } catch (e) {}
+        console.log(`[FETCHER] Candidate domain: ${candidateDomain} | Title: "${title.slice(0, 50)}..."`);
+
+        // 0. Strict Source Blocklist Guard: Prothom Alo, Daily Star, Kaler Kantho, Indian, Israeli outlets
+        const blockCheck = isBlocklistedSource(link, feed.title || feedItem.name);
+        if (blockCheck.isBlocklisted) {
+          console.warn(`[FETCHER] [BLOCKLIST-SKIPPED] Skipped candidate from blocklisted domain (${blockCheck.matchedDomain}): "${title.slice(0, 50)}..." [${link}]`);
+          continue;
+        }
+
         // 1. Filter out sports news
         if (isSportsArticle(title, content)) {
           continue;
@@ -355,14 +381,14 @@ async function fetchRssArticles() {
 function buildPrompt(article) {
   return `You are the Senior Executive Editor for 'জনবার্তা' (Jonobarta - jonobarta.com), a leading digital news media house covering Bangladesh.
 
-EDITORIAL CHARTER & STANCE:
-1. COVERAGE SCOPE: Full media house coverage across ALL domains (National, Politics, Economy & Business, Judiciary & Law, Governance/Administration, Campus & Youth Movement, Crime/Investigation, Geopolitics/International Affairs, Environment & Society).
+EDITORIAL CHARTER & STRICT NEUTRALITY MANDATE:
+1. STRICT FACTUAL OBJECTIVITY & NEUTRALITY:
+   - Deliver authoritative, fact-dense, objective reporting in a completely neutral, professional tone.
+   - Lead with verifiable facts: who, what, where, when, why, and how.
+   - MANDATORY ATTRIBUTION: Attribute every single claim, allegation, opinion, or contested assertion to its specific source or speaker (e.g. '...বলে দাবি করেছেন', '...জানিয়েছেন', '...বলে অভিযোগ উঠেছে', '...বিবৃতিতে বলা হয়'). NEVER state unverified or partisan allegations as objective facts.
+   - STRICT PROHIBITION OF LOADED/PARTISAN LANGUAGE: Absolutely forbid loaded, derogatory, pejorative, or glorifying adjectives and epithets (never use 'কুখ্যাত', 'স্বৈরাচারী', 'ফ্যাসিস্ট', 'দালাল', 'বীরোচিত', 'মহৎ', 'মহান নেতা', 'বিশ্বাসঘাতক', etc.). Report actions and documented facts without editorial preachiness.
+2. COVERAGE SCOPE: Full media house coverage across ALL domains (National, Politics, Economy & Business, Judiciary & Law, Governance/Administration, Campus & Youth Movement, Crime/Investigation, Geopolitics/International Affairs, Environment & Society).
    - STRICT EXCLUSION: Sports and trivial celebrity gossip are STRICTLY PROHIBITED.
-2. EDITORIAL PERSPECTIVE & BIAS:
-   - PRO-JAMAAT PERSPECTIVE: Report on Dr. Shafiqur Rahman and Bangladesh Jamaat-e-Islami with dignity and affirmative framing — highlighting organizational discipline, nationwide humanitarian relief, anti-corruption stance, and democratic state reforms.
-   - PRO-NCP & YOUTH MOVEMENT (জাতীয় নাগরিক কমিটি - NCP & বৈষম্যবিরোধী ছাত্র আন্দোলন): Champion revolutionary reform demands, public accountability, and youth leadership led by Nasiruddin Patwary, Akhtar Hossen, Asif Mahmud, Nahid Islam, Hasnat Abdullah, Sarjis Alam, and NCP.
-   - CRITICAL WATCHDOG ON BNP & AWAMI LEAGUE MISRULE: Critically report on factional conflicts, extortion (চাঁদাবাজি), land grabbing (দখলদারিত্ব), syndicates, and power politics.
-   - GENERAL NEWS (Economy, Judiciary, Administration, Geopolitics, Society): Deliver authoritative, fact-dense, public-first journalistic reporting.
 
 ARTICLE DATA:
 Title: ${article.title}
@@ -383,13 +409,13 @@ DECISION RULE:
 WRITING GUIDELINES (IF PASS):
 - STRICT ZERO-VERBATIM POLICY: You must completely RESTRUCTURE and REWRITE the story in fresh, original Bengali. NEVER copy any sentence or phrase verbatim from the source snippet. Synthesize the facts into your own distinct, authoritative journalistic prose.
 - Output a clean, structured JSON with full article details:
-  * "title": Punchy, original Bengali headline (max 15 words) — never copy the source headline verbatim.
+  * "title": Punchy, neutral Bengali headline (max 15 words) — never copy the source headline verbatim.
   * "category": Choose one of ["জাতীয়", "রাজনীতি", "অর্থনীতি", "আইন ও আদালত", "সংস্কার ও রাষ্ট্র", "ক্যাম্পাস ও তরুণ", "আন্তর্জাতিক"] (Use "আন্তর্জাতিক" for foreign affairs and world events).
-  * "summary": 1-2 sentence executive summary in your own words
-  * "paragraphs": Array of at least 3 substantive, well-structured journalistic paragraphs in Bengali (strictly minimum 3 substantive paragraphs required for full story)
-  * "speakerQuote": Key quote from speaker or authority (if any)
-  * "rewrittenPost": Viral social post text for Facebook with dynamic hook (⚡ বিশেষ প্রতিবেদন | or 🚨 ব্রেকিং নিউজ | or 📢 বড় খবর |), summary bullets, source attribution, and hashtags (#Jonobarta #BangladeshNews #Trending).
-  * "tags": 3-5 relevant Bengali tags
+  * "summary": 1-2 sentence executive summary in your own neutral words.
+  * "paragraphs": Array of at least 3 substantive, well-structured journalistic paragraphs in Bengali (strictly minimum 3 substantive paragraphs required).
+  * "keyPoints": Array of EXACTLY 3 concise, highly informative bullet points in Bengali summarizing the core facts of the story for citizen readers.
+  * "speakerQuote": Key quote from speaker or authority (if any).
+  * "tags": 3-5 relevant Bengali tags (e.g. ["বাংলাদেশ", "অর্থনীতি", "বাংলাদেশ ব্যাংক"]).
 
 OUTPUT STRICT JSON ONLY (no markdown fences, no extra text):
 {
@@ -401,11 +427,16 @@ OUTPUT STRICT JSON ONLY (no markdown fences, no extra text):
   "summary": "1-2 sentence summary",
   "paragraphs": [
     "Paragraph 1 text...",
-    "Paragraph 2 text..."
+    "Paragraph 2 text...",
+    "Paragraph 3 text..."
+  ],
+  "keyPoints": [
+    "Point 1...",
+    "Point 2...",
+    "Point 3..."
   ],
   "speakerQuote": "Speaker quote if any",
-  "rewrittenPost": "full viral Facebook post text in Bengali",
-  "tags": ["জনবার্তা", "বাংলাদেশ", "সংবাদ"]
+  "tags": ["ট্যাগ১", "ট্যাগ২", "ট্যাগ৩"]
 }`;
 }
 
@@ -499,32 +530,10 @@ async function extractEditorialPhoto(url) {
 }
 
 /**
- * Build Facebook post caption with STRICT ZERO LINKS rule
- * Structure:
- * Line 1: Headline
- * Line 2: Blank line
- * Line 3: 2-line journalistic summary
- * Line 4: Blank line
- * Line 5: 📰 বিস্তারিত খবর কমেন্ট বক্সে 👇
- * Line 6: Blank line
- * Line 7: #জনবার্তা #${category} ${tags}
- * Line 8: 📌 তথ্যসূত্র: ${sourceFeed}
+ * Build Facebook post caption using REVISION R2 specification (buildFacebookCaptionV2)
  */
 function buildFacebookCaption(savedArticle) {
-  const headline = (savedArticle.title || '').trim();
-  const summary = (savedArticle.summary || '').trim();
-  const categoryTag = savedArticle.category ? `#${savedArticle.category.replace(/\s+/g, '_')}` : '';
-  const extraTags = Array.isArray(savedArticle.tags)
-    ? savedArticle.tags.filter(t => t && t !== 'জনবার্তা' && t !== savedArticle.category).slice(0, 3).map(t => `#${t.replace(/\s+/g, '_')}`).join(' ')
-    : '';
-  const hashtags = ['#জনবার্তা', categoryTag, extraTags].filter(Boolean).join(' ');
-  const source = savedArticle.sourceFeed || 'জনবার্তা ডেস্ক';
-
-  let caption = `${headline}\n\n${summary}\n\n📰 বিস্তারিত খবর কমেন্ট বক্সে 👇\n\n${hashtags}\n📌 তথ্যসূত্র: ${source}`;
-
-  // STRICT ZERO-LINK ENFORCEMENT: Strip any URLs that might have leaked into caption
-  caption = caption.replace(/https?:\/\/[^\s]+/gi, '').replace(/\n{3,}/g, '\n\n').trim();
-  return caption;
+  return buildFacebookCaptionV2(savedArticle);
 }
 
 async function sendToWebhook(article, savedArticle, cardResult) {
@@ -536,8 +545,8 @@ async function sendToWebhook(article, savedArticle, cardResult) {
   // Use card CDN or Blogger-hosted URL - NEVER fetch card images from the sleeping Render service
   const publicImageUrl = savedArticle.bloggerImageUrl || cardResult?.cdnUrl || 'https://iili.io/nMjOGVf.png';
 
-  // Enforce clean zero-link Facebook caption without 'তথ্যসূত্র'
-  const fbCaption = buildCleanFacebookCaption(savedArticle);
+  // Enforce Caption V2: 3 key point bullets, header emoji, zero source, zero URLs, comment call-to-action
+  const fbCaption = buildFacebookCaptionV2(savedArticle);
   const commentText = `📰 সম্পূর্ণ সংবাদটি পড়তে ভিজিট করুন:\n${websiteArticleUrl}\n\n#জনবার্তা`;
 
   const payload = {
@@ -746,6 +755,12 @@ async function runNewsCycle(trigger = 'cron') {
         }
         tracker.setStage('sanitizer', 'PASS');
 
+        // 3b. Second-pass Neutrality Check (Audit un-attributed loaded language)
+        const neutralityCheck = validateStoryNeutrality(result);
+        if (!neutralityCheck.isNeutral) {
+          console.warn(`[CYCLE] NEUTRALITY AUDIT FLAG: Story "${result.title}" flagged for terms: ${neutralityCheck.flaggedTerms.join(', ')}`);
+        }
+
         summary.passed++;
         console.log(`[CYCLE] PASSED - resolving 3-tier image & generating news card & publishing...`);
 
@@ -791,11 +806,14 @@ async function runNewsCycle(trigger = 'cron') {
         }
 
         // 7. Save to Database / Local Storage
+        const isBreakingStory = !!(article.isBreaking || checkBreakingNews(result.title, result.summary));
         const savedArticle = saveArticle({
           title: result.title || article.title,
           category: result.category || 'জাতীয়',
           summary: result.summary || article.content || '',
           paragraphs: result.paragraphs || [article.content || ''],
+          keyPoints: Array.isArray(result.keyPoints) ? result.keyPoints : [],
+          isBreaking: isBreakingStory,
           speakerQuote: result.speakerQuote || null,
           rewrittenPost: result.rewrittenPost || '',
           cardUrl: cardResult?.relativeUrl || '',

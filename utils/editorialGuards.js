@@ -3,21 +3,72 @@ const path = require('path');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const QUARANTINE_FILE = path.join(DATA_DIR, 'quarantine_stories.json');
+const NEUTRALITY_AUDIT_FILE = path.join(DATA_DIR, 'neutrality_audit.json');
 
-// Mapping all known source titles to authentic Bengali typography
+// Comprehensive blocklist of outlets forbidden from sources, images, or attribution
+// Owner judges these biased: Prothom Alo, Daily Star, Kaler Kantho, all Indian outlets, all Israeli outlets
+const SOURCE_BLOCKLIST_DOMAINS = [
+  // Prothom Alo (all feeds & subdomains)
+  'prothomalo.com', 'images.prothomalo.com', 'media.prothomalo.com', 'assets.prothomalo.com', 'palo-images', 'palo.blob', 'prothomalo',
+  // Daily Star
+  'thedailystar.net', 'dailystar.net', 'daily-star', 'dailystar',
+  // Kaler Kantho
+  'kalerkantho.com', 'kaler-kantho', 'kalerkantho',
+  // ALL Indian outlets
+  'timesofindia.indiatimes.com', 'timesofindia', 'indiatimes.com',
+  'ndtv.com', 'ndtv.in', 'ndtv',
+  'thehindu.com', 'thehindu',
+  'indianexpress.com', 'indianexpress',
+  'hindustantimes.com', 'hindustantimes',
+  'anandabazar.com', 'anandabazar',
+  'zeenews.india.com', 'zeenews',
+  'news18.com', 'news18',
+  'indiatoday.in', 'indiatoday',
+  'firstpost.com', 'firstpost',
+  'theprint.in', 'theprint',
+  'thewire.in', 'thewire',
+  'republicworld.com', 'republicworld',
+  // ALL Israeli outlets
+  'haaretz.com', 'haaretz.co.il', 'haaretz',
+  'timesofisrael.com', 'timesofisrael',
+  'jpost.com', 'jerusalempost.com', 'jerusalempost',
+  'ynetnews.com', 'ynet.co.il', 'ynet',
+  'i24news.tv', 'i24news',
+  'israelnationalnews.com', 'israelhayom.com'
+];
+
+/**
+ * Check if a source URL, domain, or name is on the forbidden blocklist
+ */
+function isBlocklistedSource(url = '', sourceName = '') {
+  const combined = (String(url) + ' ' + String(sourceName)).toLowerCase();
+  for (const domain of SOURCE_BLOCKLIST_DOMAINS) {
+    if (combined.includes(domain.toLowerCase())) {
+      return { isBlocklisted: true, matchedDomain: domain };
+    }
+  }
+  return { isBlocklisted: false, matchedDomain: null };
+}
+
+// Mapping approved and neutral source titles to authentic Bengali typography
 const BENGALI_OUTLET_MAP = {
   'amar desh': 'আমার দেশ',
   'amardesh': 'আমার দেশ',
-  'prothom alo': 'প্রথম আলো',
-  'prothomalo': 'প্রথম আলো',
+  'dailyamardesh': 'আমার দেশ',
+  'ntv online': 'এনটিভি',
+  'ntv': 'এনটিভি',
+  'channel one': 'চ্যানেল ওয়ান',
+  'channel one news': 'চ্যানেল ওয়ান',
+  'channelone': 'চ্যানেল ওয়ান',
+  'jamuna television': 'যমুনা টেলিভিশন',
+  'jamuna tv': 'যমুনা টেলিভিশন',
   'bbc news বাংলা': 'বিবিসি বাংলা',
   'bbc news': 'বিবিসি বাংলা',
   'bbc news bangla': 'বিবিসি বাংলা',
   'bbc': 'বিবিসি বাংলা',
-  'the daily star': 'দ্য ডেইলি স্টার',
-  'daily star': 'দ্য ডেইলি স্টার',
-  'ntv online': 'এনটিভি',
-  'ntv': 'এনটিভি',
+  'voa bangla': 'ভয়েস অব আমেরিকা (VOA বাংলা)',
+  'voice of america': 'ভয়েস অব আমেরিকা (VOA বাংলা)',
+  'voa': 'ভয়েস অব আমেরিকা (VOA বাংলা)',
   'channel i online': 'চ্যানেল আই',
   'channel i': 'চ্যানেল আই',
   'চ্যানেল আই অনলাইন': 'চ্যানেল আই',
@@ -29,8 +80,6 @@ const BENGALI_OUTLET_MAP = {
   'bangla tribune': 'বাংলা ট্রিবিউন',
   'dhaka tribune': 'ঢাকা ট্রিবিউন',
   'samakal': 'সমকাল',
-  'kaler kantho': 'কালের কণ্ঠ',
-  'kalerkantho': 'কালের কণ্ঠ',
   'ittefaq': 'ইত্তেফাক',
   'bdnews24': 'বিডিনিউজ২৪',
   'jonobarta': 'জনবার্তা ডেস্ক',
@@ -242,39 +291,181 @@ function validateStoryEditorial(article) {
 }
 
 /**
- * Build Facebook post caption with STRICT ZERO LINKS and NO 'তথ্যসূত্র'
+ * Caption format v2 (replaces old caption spec)
  * Structure:
- * Line 1: Headline
- * Line 2: Blank line
- * Line 3: 2-line journalistic summary
- * Line 4: Blank line
- * Line 5: 📰 বিস্তারিত খবর কমেন্ট বক্সে 👇
- * Line 6: Blank line
- * Line 7: #জনবার্তা #${category} ${tags}
- *
- * ('তথ্যসূত্র' / attribution is explicitly omitted from Facebook caption!)
+ * 🚨 ব্রেকিং নিউজ | [headline]    (or 📰 [headline] for non-breaking stories)
+ * • [key point 1]
+ * • [key point 2]
+ * • [key point 3]
+ * 
+ * 📰 বিস্তারিত খবর কমেন্ট বক্সে 👇
+ * 
+ * #Jonobarta #BangladeshNews #Trending #[Bengali category tag]
+ * 
+ * HARD BANS:
+ * - NO 📌 তথ্যসূত্র line
+ * - NO সূত্র: line
+ * - NO source name (NTV, Jamuna, Amar Desh, etc.)
+ * - NO source URL
+ * - NO article URL — anywhere!
  */
-function buildCleanFacebookCaption(savedArticle) {
+function buildFacebookCaptionV2(savedArticle) {
   const headline = (savedArticle.title || '').trim();
-  const summary = (savedArticle.summary || '').trim();
-  const categoryTag = savedArticle.category ? `#${savedArticle.category.replace(/\s+/g, '_')}` : '';
-  const extraTags = Array.isArray(savedArticle.tags)
-    ? savedArticle.tags.filter(t => t && t !== 'জনবার্তা' && t !== savedArticle.category).slice(0, 3).map(t => `#${t.replace(/\s+/g, '_')}`).join(' ')
-    : '';
-  const hashtags = ['#জনবার্তা', categoryTag, extraTags].filter(Boolean).join(' ');
+  const isBreaking = !!savedArticle.isBreaking;
+  const headerLine = isBreaking ? `🚨 ব্রেকিং নিউজ | ${headline}` : `📰 ${headline}`;
 
-  let caption = `${headline}\n\n${summary}\n\n📰 বিস্তারিত খবর কমেন্ট বক্সে 👇\n\n${hashtags}`;
+  let points = [];
+  if (Array.isArray(savedArticle.keyPoints) && savedArticle.keyPoints.length > 0) {
+    points = savedArticle.keyPoints
+      .map(p => String(p).trim().replace(/^[•\-\*]\s*/, ''))
+      .filter(p => p.length > 10);
+  }
 
-  // STRICT ZERO-LINK ENFORCEMENT: Strip any URLs
+  // Fallback: extract from paragraphs or summary if fewer than 3 key points
+  if (points.length < 3) {
+    const candidateSentences = [];
+    if (savedArticle.summary) {
+      candidateSentences.push(...savedArticle.summary.split(/(?<=[।?!])\s+/).map(s => s.trim().replace(/[।?!]+$/, '')).filter(Boolean));
+    }
+    if (Array.isArray(savedArticle.paragraphs)) {
+      for (const p of savedArticle.paragraphs) {
+        if (typeof p === 'string') {
+          candidateSentences.push(...p.split(/(?<=[।?!])\s+/).map(s => s.trim().replace(/[।?!]+$/, '')).filter(Boolean));
+        }
+      }
+    }
+
+    for (const sent of candidateSentences) {
+      if (points.length >= 3) break;
+      const clean = sent.replace(/^[•\-\*]\s*/, '').trim();
+      if (clean.length > 20 && !points.some(pt => pt.includes(clean.slice(0, 20)))) {
+        points.push(clean);
+      }
+    }
+  }
+
+  // Ensure exactly 3 key points
+  const fallbackPoints = [
+    'ঘটনা প্রবাহের সার্বিক তথ্য ও সর্বশেষ পরিস্থিতি পর্যালোচনা',
+    'সংশ্লিষ্ট কর্তৃপক্ষ ও দায়িত্বশীল মহলের পর্যবেক্ষণ',
+    'আইনশৃঙ্খলা পরিস্থিতি স্বাভাবিক রাখতে নেওয়া হয়েছে বাড়তি সতর্কতা'
+  ];
+  while (points.length < 3) {
+    points.push(fallbackPoints[points.length]);
+  }
+
+  const bulletLines = points.slice(0, 3).map(p => `• ${p}`).join('\n');
+  const rawCat = (savedArticle.category || 'জাতীয়').replace(/\s+/g, '_');
+  const categoryTag = `#${rawCat}`;
+
+  let caption = `${headerLine}\n${bulletLines}\n\n📰 বিস্তারিত খবর কমেন্ট বক্সে 👇\n\n#Jonobarta #BangladeshNews #Trending ${categoryTag}`;
+
+  // HARD BANS SANITIZATION:
+  // 1. Strip any URLs (http/https/www/domains)
   caption = caption.replace(/https?:\/\/[^\s]+/gi, '');
-  // STRICT EXCLUSION OF 'তথ্যসূত্র' / attribution from caption
+  caption = caption.replace(/www\.[^\s]+/gi, '');
+
+  // 2. Strip any 'তথ্যসূত্র' or 'সূত্র:' lines
   caption = caption.replace(/📌\s*তথ্যসূত্র[^\n]*/gi, '');
   caption = caption.replace(/তথ্যসূত্র[^\n]*/gi, '');
   caption = caption.replace(/সূত্র:[^\n]*/gi, '');
-  // Clean up excess newlines
-  caption = caption.replace(/\n{3,}/g, '\n\n').trim();
+  caption = caption.replace(/সূত্র[^\n]*/gi, '');
 
+  // 3. Strip any source outlet names
+  const BANNED_OUTLETS_IN_CAPTION = [
+    'আমার দেশ', 'দৈনিক আমার দেশ', 'Amar Desh',
+    'এনটিভি', 'এনটিভি অনলাইন', 'NTV Online', 'NTV',
+    'যমুনা টেলিভিশন', 'যমুনা টিভি', 'Jamuna TV', 'Jamuna Television',
+    'চ্যানেল আই অনলাইন', 'চ্যানেল আই', 'Channel i Online', 'Channel i',
+    'চ্যানেল ওয়ান', 'চ্যানেল ১', 'Channel One',
+    'বিবিসি বাংলা', 'বিবিসি', 'BBC Bangla', 'BBC',
+    'ভয়েস অব আমেরিকা', 'ভিওএ বাংলা', 'VOA Bangla', 'VOA',
+    'দ্য বিজনেস স্ট্যান্ডার্ড', 'বিজনেস স্ট্যান্ডার্ড', 'TBS News', 'TBS',
+    'বিডি২৪লাইভ', 'BD24Live',
+    'প্রথম আলো', 'Prothom Alo',
+    'দ্য ডেইলি স্টার', 'ডেইলি স্টার', 'The Daily Star', 'Daily Star',
+    'কালের কণ্ঠ', 'Kaler Kantho',
+    'রয়টার্স', 'এএফপি', 'বাসস', 'ইউএনবি'
+  ];
+
+  for (const src of BANNED_OUTLETS_IN_CAPTION) {
+    const esc = src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\b${esc}\\b`, 'gi');
+    caption = caption.replace(regex, '');
+  }
+
+  // Clean excess spaces and formatting
+  caption = caption.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
   return caption;
+}
+
+// Backward-compatible alias
+const buildCleanFacebookCaption = buildFacebookCaptionV2;
+
+// Neutrality checking keywords
+const UNATTRIBUTED_LOADED_TERMS = [
+  'কুখ্যাত', 'স্বৈরাচারী', 'ফ্যাসিস্ট', 'দালাল', 'বিশ্বাসঘাতক', 'খলনায়ক',
+  'নরপিশাচ', 'মীরজাফর', 'দানবীয়', 'ধিক্কারজনক', 'কাপুরুষোচিত',
+  'মহান নেতা', 'বীরোচিত', 'যুগান্তকারী বিজয়ের মহানায়ক', 'অবিসংবাদিত নেতা'
+];
+
+const ATTRIBUTION_VERBS = [
+  'দাবি করেছেন', 'দাবি করেন', 'বলে দাবি', 'জানিয়েছেন', 'জানান', 'বলে জানান',
+  'মন্তব্য করেছেন', 'মন্তব্য করেন', 'উল্লেখ করেছেন', 'উল্লেখ করেন',
+  'অভিযোগ করেছেন', 'অভিযোগ করেন', 'বলে অভিযোগ', 'বলেন', 'বিবৃতিতে বলা হয়',
+  'জানিয়েছে', 'জানায়'
+];
+
+/**
+ * Second-pass neutrality check:
+ * Ensures no un-attributed attack or praise language toward any party, person, or government.
+ * Logs any flagged story to data/neutrality_audit.json.
+ */
+function validateStoryNeutrality(story) {
+  const title = story.title || '';
+  const summary = story.summary || '';
+  const paras = Array.isArray(story.paragraphs) ? story.paragraphs.join(' ') : (story.paragraphs || '');
+  const combined = `${title} ${summary} ${paras}`;
+
+  const flagged = [];
+  const sentences = combined.split(/(?<=[।?!])\s+/);
+
+  for (const sent of sentences) {
+    for (const term of UNATTRIBUTED_LOADED_TERMS) {
+      if (sent.includes(term)) {
+        const hasAttribution = ATTRIBUTION_VERBS.some(v => sent.includes(v));
+        if (!hasAttribution) {
+          flagged.push({ term, sentence: sent.trim() });
+        }
+      }
+    }
+  }
+
+  if (flagged.length > 0) {
+    try {
+      if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+      let auditList = [];
+      if (fs.existsSync(NEUTRALITY_AUDIT_FILE)) {
+        try {
+          auditList = JSON.parse(fs.readFileSync(NEUTRALITY_AUDIT_FILE, 'utf8'));
+        } catch {}
+      }
+      auditList.unshift({
+        timestamp: new Date().toISOString(),
+        title: story.title || 'Untitled',
+        flaggedTerms: flagged.map(f => f.term),
+        details: flagged
+      });
+      fs.writeFileSync(NEUTRALITY_AUDIT_FILE, JSON.stringify(auditList.slice(0, 200), null, 2), 'utf8');
+      console.warn(`[NEUTRALITY-PASS] Flagged loaded language in story "${title}": ${flagged.map(f => f.term).join(', ')}`);
+    } catch (e) {
+      console.error('[NEUTRALITY-PASS] Error logging neutrality audit:', e.message);
+    }
+
+    return { isNeutral: false, flaggedTerms: flagged.map(f => f.term), flagged };
+  }
+
+  return { isNeutral: true, flaggedTerms: [], flagged: [] };
 }
 
 module.exports = {
@@ -284,8 +475,13 @@ module.exports = {
   scanAndCleanLatinWords,
   validateStoryEditorial,
   buildCleanFacebookCaption,
+  buildFacebookCaptionV2,
+  validateStoryNeutrality,
   ensureMinimumParagraphs,
+  isBlocklistedSource,
+  SOURCE_BLOCKLIST_DOMAINS,
   BENGALI_OUTLET_MAP,
   LATIN_WORD_TRANSLATIONS,
-  QUARANTINE_FILE
+  QUARANTINE_FILE,
+  NEUTRALITY_AUDIT_FILE
 };

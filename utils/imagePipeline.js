@@ -2,6 +2,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { SOURCE_BLOCKLIST_DOMAINS, isBlocklistedSource } = require('./editorialGuards');
 
 const IMAGES_DIR = path.join(__dirname, '..', 'public', 'images', 'articles');
 if (!fs.existsSync(IMAGES_DIR)) {
@@ -127,6 +128,10 @@ function isOutletWatermarkedImage(url) {
     if (lower.includes(sig)) {
       return true;
     }
+  }
+  const blockCheck = isBlocklistedSource(url);
+  if (blockCheck.isBlocklisted) {
+    return true;
   }
   return false;
 }
